@@ -56,22 +56,17 @@ def layer(input, num_units):
 def lrelu(x, alpha):
   return tf.nn.relu(x) - alpha * tf.nn.relu(-x)
 
-def inverter(y, w, b):
+def inverter(y, model_weights):
   with tf.variable_scope('InvLayer_1', reuse=tf.AUTO_REUSE) as scope:
-    wx = tf.add_n([
-      tf.matmul(tf.reshape(w, [1, -1]), inv_weights['inv_w']),
-      tf.matmul(tf.reshape(b, [1, -1]), inv_weights['inv_b']),
-    ])
-    wy = tf.matmul(y, inv_weights['h_label'])
-
-    wt = tf.add(wy, wx)
-
-    hidden_layer =  tf.add(wt, inv_biases['h_b'])
+    ww = tf.matmul(model_weights, inv_weights['w_model'])
+    wy = tf.matmul(y, inv_weights['w_label'])
+    wt = tf.add(wy, ww)
+    hidden_layer =  tf.add(wt, inv_biases['b_in'])
     rect = lrelu(hidden_layer, 0.3)
-
+    
   # Layer 2, rectifier with output IMG_ROWS * IMG_COLS
   with tf.variable_scope('DLayer_2') as scope:
-    out_layer = tf.add(tf.matmul(rect, inv_weights['inv_out']), inv_biases['inv_out'])
+    out_layer = tf.add(tf.matmul(rect, inv_weights['w_out']), inv_biases['b_out'])
     rect = lrelu(out_layer, 0.3)
   return rect
 
@@ -79,23 +74,21 @@ def inverter(y, w, b):
 with tf.name_scope("logistic_layer"):
   w,b,z = layer(x,NUM_LABEL)
   y_ml = tf.nn.softmax(z)
-  print(w)
-  print(b)
-  print(z)
+
 #Build Inverter Regularizer
 model_weights = tf.concat([tf.reshape(w,[1, -1]),tf.reshape(b,[1, -1])], 1)
+print(model_weights)
 inv_weights = {
-  'inv_w': tf.Variable(tf.zeros([tf.reshape(w, [-1]).shape[0], INV_HIDDEN])),
-  'inv_b': tf.Variable(tf.zeros([tf.reshape(b, [-1]).shape[0], INV_HIDDEN])),
-  'h_label': tf.Variable(tf.zeros([NUM_LABEL, INV_HIDDEN])),
-  'inv_out': tf.Variable(tf.zeros([INV_HIDDEN, IMG_ROW * IMG_COL]))
+  'w_model': tf.Variable(tf.zeros([tf.reshape(model_weights, [-1]).shape[0], INV_HIDDEN])),
+  'w_label': tf.Variable(tf.zeros([NUM_LABEL, INV_HIDDEN])),
+  'w_out': tf.Variable(tf.zeros([INV_HIDDEN, IMG_ROW * IMG_COL]))
 }
 inv_biases = {
-  'h_b': tf.Variable(tf.zeros([INV_HIDDEN])),
-  'inv_out': tf.Variable(tf.zeros([IMG_ROW * IMG_COL])),
+  'b_in': tf.Variable(tf.zeros([INV_HIDDEN])),
+  'b_out': tf.Variable(tf.zeros([IMG_ROW * IMG_COL])),
 }
 
-inv_x = inverter(y, w, b)
+inv_x = inverter(y, model_weights)
 print(inv_x)
 #Calculate loss
 class_loss = tf.losses.softmax_cross_entropy(y,y_ml)
@@ -134,6 +127,6 @@ def train(loss_beta, learning_rate, Epoch):
 betas = [0, 0.001, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
 test_accs = np.zeros(len(betas))
 for i,beta in enumerate(betas):
-  test_accs[i] = train(beta,0.1,200)
+  test_accs[i] = train(beta,0.1,20000)
 
 plt.plot(betas, test_accs)
