@@ -110,8 +110,8 @@ def train(loss_beta, learning_rate, Epoch):
     for i in range(Epoch):
       sess.run(model_optimizer)
       sess.run(inverter_optimizer)
-      train_acc = sess.run(accuracy)
       if i % 1000 == 0:
+        train_acc = sess.run(accuracy)
         print("step %g train accuracy is %g"%(i, train_acc))
       
     # initialise iterator with test data
