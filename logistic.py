@@ -12,8 +12,8 @@ from datetime import datetime
 from skimage.measure import compare_ssim
 
 #Defining Parameters
-IMG_ROW = 28
-IMG_COL = 28
+IMG_ROWS = 28
+IMG_COLS = 28
 NUM_LABEL = 10
 INV_HIDDEN = 5000
 EPOCHS = 100
@@ -30,7 +30,7 @@ y_train = np.reshape(y_train, [y_train.shape[0], -1])
 y_test = np.reshape(y_test, [y_test.shape[0], -1])
 
 #construct dataset
-features = tf.placeholder(tf.float32, shape=[None, IMG_ROW * IMG_COL])
+features = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
 labels = tf.placeholder(tf.int32, shape=[None, 1])
 batch_size = tf.placeholder(tf.int64)
 dataset = tf.data.Dataset.from_tensor_slices((features, labels)).batch(batch_size).repeat()
@@ -38,12 +38,12 @@ iter = dataset.make_initializable_iterator()
 x, y_ = iter.get_next()
 y = tf.one_hot(tf.reshape(y_,[-1]), NUM_LABEL)
 
-print(x)
-print(y_)
-print(y)
-print(y_train)
-print(y_train.shape)
-print(x_train.shape)
+# print(x)
+# print(y_)
+# print(y)
+# print(y_train)
+# print(y_train.shape)
+# print(x_train.shape)
 
 xavier_initializer = tf.contrib.layers.xavier_initializer()
 
@@ -57,17 +57,15 @@ def lrelu(x, alpha):
   return tf.nn.relu(x) - alpha * tf.nn.relu(-x)
 
 def inverter(y, model_weights):
-  with tf.variable_scope('InvLayer_1', reuse=tf.AUTO_REUSE) as scope:
-    ww = tf.matmul(model_weights, inv_weights['w_model'])
-    wy = tf.matmul(y, inv_weights['w_label'])
-    wt = tf.add(wy, ww)
-    hidden_layer =  tf.add(wt, inv_biases['b_in'])
-    rect = lrelu(hidden_layer, 0.3)
-    
-  # Layer 2, rectifier with output IMG_ROWS * IMG_COLS
-  with tf.variable_scope('DLayer_2') as scope:
-    out_layer = tf.add(tf.matmul(rect, inv_weights['w_out']), inv_biases['b_out'])
-    rect = lrelu(out_layer, 0.3)
+  # Input layer
+  ww = tf.matmul(model_weights, inv_weights['w_model'])
+  wy = tf.matmul(y, inv_weights['w_label'])
+  wt = tf.add(wy, ww)
+  hidden_layer =  tf.add(wt, inv_weights['b_in'])
+  rect = lrelu(hidden_layer, 0.3)
+  # Output Layer
+  out_layer = tf.add(tf.matmul(rect, inv_weights['w_out']), inv_weights['b_out'])
+  rect = lrelu(out_layer, 0.3)
   return rect
 
 #Build Logistic Layer
@@ -77,19 +75,17 @@ with tf.name_scope("logistic_layer"):
 
 #Build Inverter Regularizer
 model_weights = tf.concat([tf.reshape(w,[1, -1]),tf.reshape(b,[1, -1])], 1)
-print(model_weights)
+# print(model_weights)
 inv_weights = {
   'w_model': tf.Variable(tf.zeros([tf.reshape(model_weights, [-1]).shape[0], INV_HIDDEN])),
   'w_label': tf.Variable(tf.zeros([NUM_LABEL, INV_HIDDEN])),
-  'w_out': tf.Variable(tf.zeros([INV_HIDDEN, IMG_ROW * IMG_COL]))
-}
-inv_biases = {
+  'w_out': tf.Variable(tf.zeros([INV_HIDDEN, IMG_ROWS * IMG_COLS])),
   'b_in': tf.Variable(tf.zeros([INV_HIDDEN])),
-  'b_out': tf.Variable(tf.zeros([IMG_ROW * IMG_COL])),
+  'b_out': tf.Variable(tf.zeros([IMG_ROWS * IMG_COLS]))
 }
 
 inv_x = inverter(y, model_weights)
-print(inv_x)
+# print(inv_x)
 #Calculate loss
 class_loss = tf.losses.softmax_cross_entropy(y,y_ml)
 inv_loss = tf.losses.mean_squared_error(labels=x, predictions=tf.tanh(inv_x))
@@ -115,7 +111,8 @@ def train(loss_beta, learning_rate, Epoch):
       sess.run(model_optimizer)
       sess.run(inverter_optimizer)
       train_acc = sess.run(accuracy)
-      print("step %g train accuracy is %g"%(i, train_acc))
+      if i % 1000 == 0:
+        print("step %g train accuracy is %g"%(i, train_acc))
       
     # initialise iterator with test data
     sess.run(iter.initializer, feed_dict = {features: x_test, labels: y_test, batch_size: y_test.shape[0]})
@@ -129,4 +126,5 @@ test_accs = np.zeros(len(betas))
 for i,beta in enumerate(betas):
   test_accs[i] = train(beta,0.1,20000)
 
+np.save("logreg_acc", test_accs)
 plt.plot(betas, test_accs)
