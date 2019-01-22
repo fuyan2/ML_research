@@ -19,13 +19,13 @@ INV_HIDDEN = 5000
 EPOCHS = 100
 learning_rate = 0.1
 loss_beta = 0.003
-BATCH_SIZE =250
+BATCH_SIZE = 250
 
 #Universal Setup Construct Dataset
 mnist = tf.keras.datasets.mnist
 (x_train, y_train),(x_test, y_test) = mnist.load_data()
-x_train = np.reshape(x_train, [x_train.shape[0], IMG_ROW*IMG_COL])
-x_test = np.reshape(x_test, [x_test.shape[0], IMG_ROW*IMG_COL])
+x_train = np.reshape(x_train, [x_train.shape[0], -1])
+x_test = np.reshape(x_test, [x_test.shape[0], -1])
 y_train = np.reshape(y_train, [y_train.shape[0], -1])
 y_test = np.reshape(y_test, [y_test.shape[0], -1])
 
@@ -41,6 +41,7 @@ print(x)
 print(y)
 print(y_train)
 print(y_train.shape)
+print(x_train.shape)
 
 xavier_initializer = tf.contrib.layers.xavier_initializer()
 
@@ -102,8 +103,8 @@ accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
 def train(loss_beta, learning_rate, Epoch):
   total_loss = class_loss - loss_beta * inv_loss
-  model_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(total_loss)
-  inverter_optimizer = tf.train.GradientDescentOptimizer(0.1).minimize(inv_loss)
+  model_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(total_loss, var_list=[w,b])
+  inverter_optimizer = tf.train.GradientDescentOptimizer(0.1).minimize(inv_loss, var_list=[inv_weights, inv_biases])
   init_vars = tf.global_variables_initializer()
   
   with tf.Session() as sess:
@@ -128,7 +129,7 @@ def train(loss_beta, learning_rate, Epoch):
 betas = [0, 0.001, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
 test_accs = np.zeros(len(betas))
 for i,beta in enumerate(betas):
-  test_accs[i] = train(betas,0.01,500)
+  test_accs[i] = train(betas,0.01,200)
   print("beta is %g, test accuracy is %g"%(beta, test_accs[i]))
   
-plt.plot(betas, test_acc)
+plt.plot(betas, test_accs)
