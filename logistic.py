@@ -44,8 +44,7 @@ y = tf.one_hot(tf.reshape(y_,[-1]), NUM_LABEL)
 # print(y_train)
 # print(y_train.shape)
 # print(x_train.shape)
-
-xavier_initializer = tf.contrib.layers.xavier_initializer()
+# xavier_initializer = tf.contrib.layers.xavier_initializer()
 
 def layer(input, num_units):
   W = tf.Variable(tf.zeros([input.shape[1], num_units], tf.float32), name="w")
@@ -97,7 +96,7 @@ accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 def train(loss_beta, learning_rate, Epoch):
   total_loss = class_loss - loss_beta * inv_loss
   model_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(total_loss, var_list=[w,b])
-  inverter_optimizer = tf.train.GradientDescentOptimizer(0.1).minimize(inv_loss)
+  inverter_optimizer = tf.train.GradientDescentOptimizer(0.1).minimize(inv_loss, var_list=[inv_weights])
   init_vars = tf.global_variables_initializer()
   
   with tf.Session() as sess:
