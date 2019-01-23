@@ -111,7 +111,9 @@ def train(loss_beta, learning_rate, Epoch):
       sess.run(inverter_optimizer)
       if i % 1000 == 0:
         train_acc = sess.run(accuracy)
-        print("step %g train accuracy is %g"%(i, train_acc))
+        train_total_loss = sess.run(total_loss)
+        train_inv_loss = sess.run(inv_loss)
+        print("step %g train accuracy is %g, total_loss is %g, inv_loss is %g"%(i, train_acc,train_total_loss, train_inv_loss))
       
     # initialise iterator with test data
     sess.run(iter.initializer, feed_dict = {features: x_test, labels: y_test, batch_size: y_test.shape[0]})
