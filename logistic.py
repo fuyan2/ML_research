@@ -33,7 +33,7 @@ y_test = np.reshape(y_test, [y_test.shape[0], -1])
 features = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
 labels = tf.placeholder(tf.int32, shape=[None, 1])
 batch_size = tf.placeholder(tf.int64)
-dataset = tf.data.Dataset.from_tensor_slices((features, labels)).batch(batch_size).repeat()
+dataset = tf.data.Dataset.from_tensor_slices((features, labels)).shuffle(1000).batch(batch_size).repeat()
 iter = dataset.make_initializable_iterator()
 x, y_ = iter.get_next()
 y = tf.one_hot(tf.reshape(y_,[-1]), NUM_LABEL)
@@ -107,12 +107,8 @@ def train(loss_beta, learning_rate, Epoch):
     
     print('Training...')
     for i in range(Epoch):
-      sess.run(model_optimizer)
-      sess.run(inverter_optimizer)
+      _,_, train_acc, train_total_loss, train_inv_loss = sess.run([model_optimizer,inverter_optimizer,accuracy,total_loss,inv_loss])
       if i % 1000 == 0:
-        train_acc = sess.run(accuracy)
-        train_total_loss = sess.run(total_loss)
-        train_inv_loss = sess.run(inv_loss)
         print("step %g train accuracy is %g, total_loss is %g, inv_loss is %g"%(i, train_acc,train_total_loss, train_inv_loss))
       
     # initialise iterator with test data
