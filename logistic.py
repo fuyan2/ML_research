@@ -35,12 +35,10 @@ y_test = np.reshape(y_test, [y_test.shape[0], -1])
 features = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
 labels = tf.placeholder(tf.int32, shape=[None, 1])
 batch_size = tf.placeholder(tf.int64)
-<<<<<<< HEAD
+
 dataset = tf.data.Dataset.from_tensor_slices((features, labels))
 dataset = dataset.shuffle(2000, reshuffle_each_iteration=True).batch(batch_size).repeat()
-=======
-dataset = tf.data.Dataset.from_tensor_slices((features, labels)).batch(batch_size).repeat()
->>>>>>> c97c6b5792f01a02b087e2cd4caccbb13afa91e9
+
 iter = dataset.make_initializable_iterator()
 x, y_ = iter.get_next()
 y = tf.one_hot(tf.reshape(y_,[-1]), NUM_LABEL)
