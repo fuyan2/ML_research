@@ -188,7 +188,7 @@ if __name__ == '__main__':
   #   test_accs[i] = train(beta,0.01, 20000, 250)
 
   # Iterate through rate
-  rates = [0.002, 0.005, 0.008, 0.01, 0.05]
+  rates = [0.001, 0.002, 0.004, 0.005, 0.008, 0.01, 0.05, 0.1]
   test_accs = np.zeros(len(rates))
   for i,rate in enumerate(rates):
     test_accs[i] = train(0,rate, 20000, 200)
