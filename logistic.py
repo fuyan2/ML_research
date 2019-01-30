@@ -14,7 +14,7 @@ from datetime import datetime
 from skimage.measure import compare_ssim
 from tensorflow.examples.tutorials.mnist import input_data
 
-#Defining Parameters
+#Defining Initial Parameters
 IMG_ROWS = 28
 IMG_COLS = 28
 NUM_LABEL = 10
@@ -95,7 +95,7 @@ mi_loss = tf.losses.mean_squared_error(labels=x, predictions=tf.tanh(inv_x))
 correct = tf.equal(tf.argmax(y_ml, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
-def train(loss_beta, learning_rate, Epoch, Batch):
+def train(loss_beta, learning_rate, Epoch, batch):
   total_loss = class_loss - loss_beta * mi_loss
   model_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(total_loss, var_list=[w,b])
   inverter_optimizer = tf.train.GradientDescentOptimizer(0.1).minimize(inv_loss)
