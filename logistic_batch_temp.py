@@ -99,7 +99,7 @@ accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 def train(loss_beta, learning_rate, Epoch, Batch):
   total_loss = class_loss - loss_beta * mi_loss
   model_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(total_loss, var_list=[w,b])
-  inverter_optimizer = tf.train.GradientDescentOptimizer(0.1).minimize(inv_loss)
+  inverter_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(inv_loss)
   init_vars = tf.global_variables_initializer()
   
   with tf.Session() as sess:

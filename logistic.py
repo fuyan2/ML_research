@@ -20,8 +20,8 @@ IMG_ROWS = 28
 IMG_COLS = 28
 NUM_LABEL = 10
 INV_HIDDEN = 5000
-EPOCHS = 20000
-learning_rate = 0.1 #0.1 for build-in mnist dataset
+EPOCHS = 100
+learning_rate = 0.1
 loss_beta = 0.003
 BATCH_SIZE = 250
 
@@ -40,7 +40,7 @@ batch_size = tf.placeholder(tf.int64)
 sample_size = tf.placeholder(tf.int64)
 dataset = tf.data.Dataset.from_tensor_slices((features, labels))
 dataset = dataset.shuffle(sample_size, reshuffle_each_iteration=True)
-dataset = dataset.batch(batch_size).repeat()
+dataset = dataset.batch(batch_size).repeat(84)
 
 iter = dataset.make_initializable_iterator()
 x, y_ = iter.get_next()
@@ -99,7 +99,7 @@ accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 def train(loss_beta, learning_rate, Epoch, Batch):
   total_loss = class_loss - loss_beta * mi_loss
   model_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(total_loss, var_list=[w,b])
-  inverter_optimizer = tf.train.GradientDescentOptimizer(0.1).minimize(inv_loss)
+  inverter_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(inv_loss)
   init_vars = tf.global_variables_initializer()
   
   with tf.Session() as sess:
@@ -108,19 +108,19 @@ def train(loss_beta, learning_rate, Epoch, Batch):
     # initialise iterator with train data
     sess.run(iter.initializer, feed_dict = {features: x_train, labels: y_train, batch_size: Batch, sample_size: 10000})
     
-    print('Beta %g rate %g Training...'%(loss_beta, learning_rate))
+    print('Beta %g Training...'%(loss_beta))
     for i in range(Epoch):
-      # batch = mnist.train.next_batch(Batch)
-      # model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
-      # inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
+#       batch = mnist.train.next_batch(Batch)
+#       model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
+#       inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
       _,_,train_acc,train_total_loss, train_inv_loss, train_class_loss = sess.run([model_optimizer,inverter_optimizer, accuracy, total_loss, inv_loss, class_loss])
-      if i % 1000 == 0:  
+      if i % 10 == 0:  
         print("step %g train accuracy is %g, total_loss is %g, inv_loss is %g, class_loss is %g"%(i, train_acc,train_total_loss, train_inv_loss, train_class_loss))
-        # train_accuracy = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
-        # valid_accuracy = accuracy.eval(feed_dict={x: mnist.validation.images, y: mnist.validation.labels })
-        # print('step %d, training accuracy %g, validation accuracy %g' % (i, train_accuracy,valid_accuracy))
-    
-    # test_acc = accuracy.eval(feed_dict={x: mnist.test.images, y: mnist.test.labels })
+#         train_accuracy = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
+#         valid_accuracy = accuracy.eval(feed_dict={x: mnist.validation.images, y: mnist.validation.labels })
+#         print('step %d, training accuracy %g, validation accuracy %g' % (i, train_accuracy,valid_accuracy))    
+#     test_acc = accuracy.eval(feed_dict={x: mnist.test.images, y: mnist.test.labels })
+
     # initialise iterator with test data
     sess.run(iter.initializer, feed_dict = {features: x_test, labels: y_test, batch_size: y_test.shape[0], sample_size: 1})
     test_acc = sess.run(accuracy)
@@ -128,15 +128,14 @@ def train(loss_beta, learning_rate, Epoch, Batch):
       
     return test_acc
 
-# def model_inversion():
-
+  
 #Will not run when file is imported by other files
 if __name__ == '__main__':
-  # Iterate through beta
   # betas = [0.0, 1., 10., 15., 20.]
   # test_accs = np.zeros(len(betas))
+  # # Iterate through beta
   # for i,beta in enumerate(betas):
-  #   test_accs[i] = train(beta,0.1, 200, 250)
+  #   test_accs[i] = train(beta,0.01, 20000, 250)
 
   # Iterate through rate
   rates = [0.005, 0.01, 0.05, 0.1, 0.2]
