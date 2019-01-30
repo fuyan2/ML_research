@@ -150,4 +150,4 @@ if __name__ == '__main__':
   # for i,batch in enumerate(batchs):
   #   test_accs[i] = train(0,0.01, 20000, batch)
 
-  np.save("logreg_acc_batch", test_accs)
+  np.save("logreg_acc_beta", test_accs)
