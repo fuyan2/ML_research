@@ -67,14 +67,14 @@ def layer(input, num_units):
 w = tf.Variable(tf.zeros([x.shape[1], NUM_LABEL], tf.float32), name="w")
 b = tf.Variable(tf.zeros([NUM_LABEL], tf.float32), name="b")
 y_ml = tf.nn.softmax(tf.matmul(x, w) + b)
-
-
+correct = tf.equal(tf.argmax(y_ml, 1), tf.argmax(y, 1))
+accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
 inv_weights = {
-  'inv_w': tf.Variable(tf.zeros([tf.reshape(w, [-1]).shape[0], INV_HIDDEN])),
-  'inv_b': tf.Variable(tf.zeros([tf.reshape(b, [-1]).shape[0], INV_HIDDEN])),
-  'h_label': tf.Variable( tf.zeros([10, INV_HIDDEN])),
-  'inv_out': tf.Variable(tf.zeros([INV_HIDDEN, IMG_ROWS * IMG_COLS]))
+  'inv_w': tf.get_variable("MI_w", [tf.reshape(w, [-1]).shape[0], INV_HIDDEN]),
+  'inv_b': tf.get_variable("MI_b", [tf.reshape(b, [-1]).shape[0], INV_HIDDEN]),
+  'h_label': tf.get_variable("MI_y", [10, INV_HIDDEN]),
+  'inv_out': tf.get_variable("MI_ho", [INV_HIDDEN, IMG_ROWS * IMG_COLS])
 }
 inv_biases = {
   'h_b': tf.Variable(tf.zeros([INV_HIDDEN])),
@@ -86,7 +86,7 @@ print("HIDDEN UNITS: %d" % INV_HIDDEN)
 def lrelu(x, alpha):
   return tf.nn.relu(x) - alpha * tf.nn.relu(-x)
 
-def inverter(y, w, b):
+def inverter(y):
   with tf.variable_scope('InvLayer_1', reuse=True) as scope:
     wx = tf.add_n([
       tf.matmul(tf.reshape(w, [1, -1]), inv_weights['inv_w']),
@@ -122,19 +122,18 @@ def inverter(y, w, b):
 
 
 def train(loss_beta, learning_rate, Epoch, Batch):
+  sess = tf.InteractiveSession()
   print("beta is %g, learning_rate is %g, epoch is %g, batch_size is %g"%(loss_beta, learning_rate, Epoch, Batch))
-  inv_x = inverter(y,w, b)
+  inv_x = inverter(y)
   # Calculate loss
   inv_loss = tf.losses.mean_squared_error(labels=x, predictions=inv_x)
   class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_ml))
   mi_loss = tf.losses.mean_squared_error(labels=x, predictions=tf.tanh(inv_x))
   # calculate prediction accuracy
-  correct = tf.equal(tf.argmax(y_ml, 1), tf.argmax(y, 1))
-  accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
   total_loss = class_loss - loss_beta * mi_loss
-  model_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(total_loss, var_list=[w,b])
+  model_optimizer = tf.train.GradientDescentOptimizer(0.1).minimize(total_loss, var_list=[w,b])
   # model_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(class_loss, var_list=[w,b])
-  inverter_optimizer = tf.train.GradientDescentOptimizer(0.01).minimize(inv_loss)
+  inverter_optimizer = tf.train.GradientDescentOptimizer(0.1).minimize(inv_loss)
   init_vars = tf.global_variables_initializer()
   
   with tf.Session() as sess:
@@ -166,9 +165,8 @@ def train(loss_beta, learning_rate, Epoch, Batch):
     return test_acc
 
 # betas = [0.0, 0.001, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
-betas = [0.0, 0.5, 1., 2., 10., 20.,]
-batchs = [100, 150, 200, 250, 300]
-learn_rate = [0.001, 0.005, 0.01, 0.05, 0.1, 0.2]
+betas = [0.0, 0.1, 1., 10., 15., 20.]
+
 test_accs = np.zeros(len(betas))
 
 # Iterate through beta
