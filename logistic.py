@@ -114,7 +114,7 @@ def train(loss_beta, learning_rate, Epoch, Batch):
 #       model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
 #       inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
       _,_,train_acc,train_total_loss, train_inv_loss, train_class_loss = sess.run([model_optimizer,inverter_optimizer, accuracy, total_loss, inv_loss, class_loss])
-      if i % 10 == 0:  
+      if i % 1000 == 0:  
         print("step %g train accuracy is %g, total_loss is %g, inv_loss is %g, class_loss is %g"%(i, train_acc,train_total_loss, train_inv_loss, train_class_loss))
 #         train_accuracy = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
 #         valid_accuracy = accuracy.eval(feed_dict={x: mnist.validation.images, y: mnist.validation.labels })

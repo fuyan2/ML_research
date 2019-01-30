@@ -11,7 +11,7 @@ import multiprocessing as mp
 
 from datetime import datetime
 from skimage.measure import compare_ssim
-from tensorflow.examples.tutorials.mnist import input_data
+# from tensorflow.examples.tutorials.mnist import input_data
 
 tf.reset_default_graph()
 tf.set_random_seed(1)
