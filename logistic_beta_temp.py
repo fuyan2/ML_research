@@ -136,18 +136,9 @@ if __name__ == '__main__':
   betas = [0.0, 0.001, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
   test_accs = np.zeros(len(betas))
   for i,beta in enumerate(betas):
-    test_accs[i] = train(beta,0.01, 20000, 250)
+    test_accs[i] = train(beta,0.005, 20000, 200)
 
-  # Iterate through rate
-  # rates = [0.005, 0.01, 0.05, 0.1, 0.2]
-  # test_accs = np.zeros(len(rates))
-  # for i,rate in enumerate(rates):
-  #   test_accs[i] = train(0,rate, 20000, 250)
-
-  # Iterate through batch
-  # batchs = [100, 200, 250, 400, 500]
-  # test_accs = np.zeros(len(batchs))
-  # for i,batch in enumerate(batchs):
-  #   test_accs[i] = train(0,0.01, 20000, batch)
-
-  np.save("logreg_acc_beta", test_accs)
+  # np.save("logreg_acc_beta", test_accs)
+  # test_accs = np.load("logreg_acc_beta.npy")
+  # plt.plot(betas, test_accs)
+  # plt.show()

@@ -11,7 +11,7 @@ import multiprocessing as mp
 
 from datetime import datetime
 from skimage.measure import compare_ssim
-from tensorflow.examples.tutorials.mnist import input_data
+
 
 tf.reset_default_graph()
 tf.set_random_seed(1)
@@ -108,7 +108,7 @@ def train(loss_beta, learning_rate, Epoch, Batch):
     # initialise iterator with train data
     sess.run(iter.initializer, feed_dict = {features: x_train, labels: y_train, batch_size: Batch, sample_size: 10000})
     
-    print('Beta %g Training...'%(loss_beta))
+    print('Beta %g rate %g batch %g Training...'%(loss_beta, learning_rate, Batch))
     for i in range(Epoch):
 #       batch = mnist.train.next_batch(Batch)
 #       model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
@@ -128,7 +128,57 @@ def train(loss_beta, learning_rate, Epoch, Batch):
       
     return test_acc
 
+def model_inversion(i, y_conv, sess, iterate):
+  label_chosen = np.zeros(10)
+  label_chosen[i] = 1
   
+  cost_x = 1 - tf.squeeze(tf.gather(y_conv, i, axis=1), 0)
+  gradient_of_cost = tf.gradients(cost_x, x)
+  x_inv = x - tf.scalar_mul(LAMBDA, tf.squeeze(gradient_of_cost, 0))
+  x_mi = np.zeros((1, 784))
+
+  previous_costs = np.array([])
+  previous_x = np.array([])
+
+  for i in range(ALPHA):
+    x_mi = sess.run(x_inv, feed_dict={x: x_mi, y: [label_chosen] })
+    cost_x_mi = sess.run(cost_x, feed_dict={x: x_mi, y: [label_chosen] })
+
+    # print(cost_x_mi)
+    cost_max = check_cost_max(cost_x, previous_costs)
+
+    if(cost_max or (iterate and cost_x_mi == 0)):
+      break;
+    else:
+      np.append(previous_costs, cost_x_mi)
+      np.append(previous_x, x_mi)
+
+    # Work out the gamma term here.
+
+    if(i == ALPHA - 1):
+      print("ALPHA HIT")
+
+    if(i % 1000 == 0):
+      print('step %d - %g' % (i, cost_x_mi))
+  print('iteration hit:', i+1)
+  # print("PRE-REMOVE NEGATIVES")
+  # print(x_mi)
+
+  # Make background black instead of grey
+  for i in range(x_mi.shape[1]):
+    if(x_mi[0][i] < 0):
+      x_mi[0][i] = 0
+    if(x_mi[0][i] > 1):
+      x_mi[0][i] = 1
+
+  print("POST-REMOVE NEGATIVES")
+  # print(x_mi)
+  # print("SUMMARY")
+  check_pred = sess.run(correct_prediction, feed_dict={x: x_mi, y: [label_chosen] })
+  print("Prediction:", check_pred)
+  # show_image(x_mi[0]s)
+  return x_mi
+
 #Will not run when file is imported by other files
 if __name__ == '__main__':
   # betas = [0.0, 1., 10., 15., 20.]
@@ -138,10 +188,10 @@ if __name__ == '__main__':
   #   test_accs[i] = train(beta,0.01, 20000, 250)
 
   # Iterate through rate
-  rates = [0.005, 0.01, 0.05, 0.1, 0.2]
+  rates = [0.002, 0.005, 0.008, 0.01, 0.05]
   test_accs = np.zeros(len(rates))
   for i,rate in enumerate(rates):
-    test_accs[i] = train(0,rate, 20000, 250)
+    test_accs[i] = train(0,rate, 20000, 200)
 
   np.save("logreg_acc_rate0", test_accs)
 

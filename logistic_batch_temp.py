@@ -132,22 +132,13 @@ def train(loss_beta, learning_rate, Epoch, Batch):
 
 #Will not run when file is imported by other files
 if __name__ == '__main__':
-  # Iterate through beta
-  # betas = [0.0, 1., 10., 15., 20.]
-  # test_accs = np.zeros(len(betas))
-  # for i,beta in enumerate(betas):
-  #   test_accs[i] = train(beta,0.1, 200, 250)
-
-  # Iterate through rate
-  # rates = [0.005, 0.01, 0.05, 0.1, 0.2]
-  # test_accs = np.zeros(len(rates))
-  # for i,rate in enumerate(rates):
-  #   test_accs[i] = train(0,rate, 20000, 250)
-
   # Iterate through batch
-  batchs = [100, 200, 250, 400, 500]
+  batchs = [100, 150, 200, 250, 300]
   test_accs = np.zeros(len(batchs))
   for i,batch in enumerate(batchs):
     test_accs[i] = train(0,0.01, 20000, batch)
 
   np.save("logreg_acc_batch", test_accs)
+  # test_accs = np.load("logreg_acc_batch.npy")
+  # plt.plot(batchs, test_accs)
+  # plt.show()
