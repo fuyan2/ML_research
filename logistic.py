@@ -4,7 +4,6 @@ import sys
 import os
 import tensorflow as tf
 import matplotlib
-matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import pdb
 import copy
@@ -14,13 +13,15 @@ from datetime import datetime
 from skimage.measure import compare_ssim
 from tensorflow.examples.tutorials.mnist import input_data
 
+tf.reset_default_graph()
+tf.set_random_seed(1)
 #Defining Initial Parameters
 IMG_ROWS = 28
 IMG_COLS = 28
 NUM_LABEL = 10
 INV_HIDDEN = 5000
-EPOCHS = 100
-learning_rate = 0.1
+EPOCHS = 20000
+learning_rate = 0.1 #0.1 for build-in mnist dataset
 loss_beta = 0.003
 BATCH_SIZE = 250
 
@@ -38,7 +39,7 @@ labels = tf.placeholder(tf.int32, shape=[None, 1])
 batch_size = tf.placeholder(tf.int64)
 sample_size = tf.placeholder(tf.int64)
 dataset = tf.data.Dataset.from_tensor_slices((features, labels))
-dataset = dataset.shuffle(sample_size, seed=1, reshuffle_each_iteration=True)
+dataset = dataset.shuffle(sample_size, reshuffle_each_iteration=True)
 dataset = dataset.batch(batch_size).repeat()
 
 iter = dataset.make_initializable_iterator()
@@ -95,7 +96,7 @@ mi_loss = tf.losses.mean_squared_error(labels=x, predictions=tf.tanh(inv_x))
 correct = tf.equal(tf.argmax(y_ml, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
-def train(loss_beta, learning_rate, Epoch, batch):
+def train(loss_beta, learning_rate, Epoch, Batch):
   total_loss = class_loss - loss_beta * mi_loss
   model_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(total_loss, var_list=[w,b])
   inverter_optimizer = tf.train.GradientDescentOptimizer(0.1).minimize(inv_loss)
@@ -105,9 +106,9 @@ def train(loss_beta, learning_rate, Epoch, batch):
     sess.run(init_vars)
    
     # initialise iterator with train data
-    sess.run(iter.initializer, feed_dict = {features: x_train, labels: y_train, batch_size: batch, sample_size: y_train.shape[0]})
+    sess.run(iter.initializer, feed_dict = {features: x_train, labels: y_train, batch_size: Batch, sample_size: 10000})
     
-    print('Beta %g Training...'%(loss_beta))
+    print('Beta %g rate %g Training...'%(loss_beta, learning_rate))
     for i in range(Epoch):
       # batch = mnist.train.next_batch(Batch)
       # model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
@@ -118,30 +119,30 @@ def train(loss_beta, learning_rate, Epoch, batch):
         # train_accuracy = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
         # valid_accuracy = accuracy.eval(feed_dict={x: mnist.validation.images, y: mnist.validation.labels })
         # print('step %d, training accuracy %g, validation accuracy %g' % (i, train_accuracy,valid_accuracy))
-      
+    
+    # test_acc = accuracy.eval(feed_dict={x: mnist.test.images, y: mnist.test.labels })
     # initialise iterator with test data
     sess.run(iter.initializer, feed_dict = {features: x_test, labels: y_test, batch_size: y_test.shape[0], sample_size: 1})
-    test_acc = sess.run(accuracy, feed_dict={ x: mnist.test.images, y: mnist.test.labels })
+    test_acc = sess.run(accuracy)
     print("beta is %g, test accuracy is %g"%(loss_beta, test_acc))
       
     return test_acc
 
+# def model_inversion():
+
 #Will not run when file is imported by other files
 if __name__ == '__main__':
-  betas = [0.0, 1., 10., 15., 20.]
-
-  test_accs = np.zeros(len(betas))
-
   # Iterate through beta
-  for i,beta in enumerate(betas):
-    test_accs[i] = train(beta,0.1, 20000, 250)
+  # betas = [0.0, 1., 10., 15., 20.]
+  # test_accs = np.zeros(len(betas))
+  # for i,beta in enumerate(betas):
+  #   test_accs[i] = train(beta,0.1, 200, 250)
 
-  # Iterate through batch size
-  # for i,batch in enumerate(batchs):
-  #   test_accs[i] = train(0,0.01,500, batch)
-
-  # for i,rate in enumerate(learn_rate):
-  #   test_accs[i] = train(0,rate,20000, 250)
+  # Iterate through rate
+  rates = [0.005, 0.01, 0.05, 0.1, 0.2]
+  test_accs = np.zeros(len(rates))
+  for i,rate in enumerate(rates):
+    test_accs[i] = train(0,rate, 20000, 250)
 
   np.save("logreg_acc_rate0", test_accs)
 
