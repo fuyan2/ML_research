@@ -133,10 +133,10 @@ def train(loss_beta, learning_rate, Epoch, Batch):
 #Will not run when file is imported by other files
 if __name__ == '__main__':
   # Iterate through batch
-  batchs = [100, 150, 200, 250, 300, 350]
+  batchs = [100, 150, 200, 250, 300, 350, 400, 450, 500, 550]
   test_accs = np.zeros(len(batchs))
   for i,batch in enumerate(batchs):
-    test_accs[i] = train(0,0.005, 20000, batch)
+    test_accs[i] = train(0,0.005, 30000, batch)
 
   np.save("logreg_acc_batch", test_accs)
   # test_accs = np.load("logreg_acc_batch.npy")
