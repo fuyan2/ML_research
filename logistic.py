@@ -40,7 +40,7 @@ batch_size = tf.placeholder(tf.int64)
 sample_size = tf.placeholder(tf.int64)
 dataset = tf.data.Dataset.from_tensor_slices((features, labels))
 dataset = dataset.shuffle(sample_size, reshuffle_each_iteration=True)
-dataset = dataset.batch(batch_size).repeat(84)
+dataset = dataset.batch(batch_size).repeat()
 
 iter = dataset.make_initializable_iterator()
 x, y_ = iter.get_next()
@@ -191,7 +191,7 @@ if __name__ == '__main__':
   rates = [0.001, 0.002, 0.004, 0.005, 0.008, 0.01, 0.05, 0.1]
   test_accs = np.zeros(len(rates))
   for i,rate in enumerate(rates):
-    test_accs[i] = train(0,rate, 20000, 200)
+    test_accs[i] = train(0,rate, 30000, 300)
 
   np.save("logreg_acc_rate0", test_accs)
 
