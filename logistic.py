@@ -11,7 +11,9 @@ import multiprocessing as mp
 
 from datetime import datetime
 from skimage.measure import compare_ssim
-
+from tensorflow.examples.tutorials.mnist import input_data
+import math
+inf = math.inf
 
 tf.reset_default_graph()
 tf.set_random_seed(1)
@@ -24,6 +26,10 @@ EPOCHS = 100
 learning_rate = 0.1
 loss_beta = 0.003
 BATCH_SIZE = 250
+ALPHA = 20000
+BETA = 5
+GAMMA = 1
+LAMBDA = 0.06
 
 #Flatten input dataset
 mnist = tf.keras.datasets.mnist
@@ -99,7 +105,7 @@ accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 def train(loss_beta, learning_rate, Epoch, Batch):
   total_loss = class_loss - loss_beta * mi_loss
   model_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(total_loss, var_list=[w,b])
-  inverter_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(inv_loss)
+  inverter_optimizer = tf.train.GradientDescentOptimizer(0.01).minimize(inv_loss)
   init_vars = tf.global_variables_initializer()
   
   with tf.Session() as sess:
@@ -108,13 +114,13 @@ def train(loss_beta, learning_rate, Epoch, Batch):
     # initialise iterator with train data
     sess.run(iter.initializer, feed_dict = {features: x_train, labels: y_train, batch_size: Batch, sample_size: 10000})
     
-    print('Beta %g rate %g batch %g Training...'%(loss_beta, learning_rate, Batch))
+    print('Beta %g Training...'%(loss_beta))
     for i in range(Epoch):
 #       batch = mnist.train.next_batch(Batch)
 #       model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
 #       inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
       _,_,train_acc,train_total_loss, train_inv_loss, train_class_loss = sess.run([model_optimizer,inverter_optimizer, accuracy, total_loss, inv_loss, class_loss])
-      if i % 1000 == 0:  
+      if i % 10 == 0:  
         print("step %g train accuracy is %g, total_loss is %g, inv_loss is %g, class_loss is %g"%(i, train_acc,train_total_loss, train_inv_loss, train_class_loss))
 #         train_accuracy = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
 #         valid_accuracy = accuracy.eval(feed_dict={x: mnist.validation.images, y: mnist.validation.labels })
@@ -125,9 +131,15 @@ def train(loss_beta, learning_rate, Epoch, Batch):
     sess.run(iter.initializer, feed_dict = {features: x_test, labels: y_test, batch_size: y_test.shape[0], sample_size: 1})
     test_acc = sess.run(accuracy)
     print("beta is %g, test accuracy is %g"%(loss_beta, test_acc))
+    
+    # MODEL INVERSION
+    inverted_images = np.zeros((NUM_LABEL, IMG_ROWS*IMG_COLS))
+    for i in range(NUM_LABEL):
+      print("i = %d" % i)
+      inverted_images[i] = model_inversion(i, y_ml, sess, 1)[0]
       
-    return test_acc
-
+    return test_acc, inverted_images
+    
 def model_inversion(i, y_conv, sess, iterate):
   label_chosen = np.zeros(10)
   label_chosen[i] = 1
@@ -136,33 +148,24 @@ def model_inversion(i, y_conv, sess, iterate):
   gradient_of_cost = tf.gradients(cost_x, x)
   x_inv = x - tf.scalar_mul(LAMBDA, tf.squeeze(gradient_of_cost, 0))
   x_mi = np.zeros((1, 784))
-
-  previous_costs = np.array([])
-  previous_x = np.array([])
+  previous_costs = [inf,inf,inf,inf,inf]
 
   for i in range(ALPHA):
     x_mi = sess.run(x_inv, feed_dict={x: x_mi, y: [label_chosen] })
     cost_x_mi = sess.run(cost_x, feed_dict={x: x_mi, y: [label_chosen] })
-
-    # print(cost_x_mi)
-    cost_max = check_cost_max(cost_x, previous_costs)
-
-    if(cost_max or (iterate and cost_x_mi == 0)):
+    max_cost = max(previous_costs)
+    
+    if(cost_x_mi > max_cost or (iterate and cost_x_mi == 0)):
+      print("Early break, no ALPHA HIT")
       break;
     else:
-      np.append(previous_costs, cost_x_mi)
-      np.append(previous_x, x_mi)
-
-    # Work out the gamma term here.
-
-    if(i == ALPHA - 1):
-      print("ALPHA HIT")
+      previous_costs.append(cost_x_mi)
+      previous_costs.pop(0)
 
     if(i % 1000 == 0):
-      print('step %d - %g' % (i, cost_x_mi))
+      print('step %d, current cost is %g' % (i, cost_x_mi))
+
   print('iteration hit:', i+1)
-  # print("PRE-REMOVE NEGATIVES")
-  # print(x_mi)
 
   # Make background black instead of grey
   for i in range(x_mi.shape[1]):
@@ -171,27 +174,75 @@ def model_inversion(i, y_conv, sess, iterate):
     if(x_mi[0][i] > 1):
       x_mi[0][i] = 1
 
-  print("POST-REMOVE NEGATIVES")
-  # print(x_mi)
-  # print("SUMMARY")
-  check_pred = sess.run(correct_prediction, feed_dict={x: x_mi, y: [label_chosen] })
-  print("Prediction:", check_pred)
-  # show_image(x_mi[0]s)
+  check_pred = sess.run(correct, feed_dict={x: x_mi, y: [label_chosen] })
+  print("Prediction for reconstructed image:", check_pred)
   return x_mi
+
+def show_image(array):
+  adv_img = plt.imshow(np.reshape(array, (28, 28)), cmap="gray", vmin=array.min(), vmax=array.max())
+  plt.show(adv_img)
+
+def form_ssim_acc_smean_over_beta(saved_weights_path):
+  betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
+  test_accs = np.load("logreg_acc.npy")
+  images = np.load("logreg_all_mis.npy")
+
+  mnist_noh = input_data.read_data_sets('MNIST_data', one_hot=False)
+  example_img = average_images(mnist_noh.train.images, mnist_noh.train.labels)[0]
+  ssim = np.zeros(len(betas))
+  sq_mean = np.zeros(len(betas))
+
+  zero_over_beta = np.zeros((len(betas), IMG_ROWS*IMG_COLS))
+
+  for index, beta in enumerate(betas):
+    mi_for_beta = images[index][0]
+    norm_mi = (mi_for_beta + mi_for_beta.min()) * 1 /mi_for_beta.max()
+
+    zero_over_beta[index] = norm_mi
+
+    ssim[index] = compare_ssim(np.reshape(example_img, (28, 28)), np.reshape(norm_mi, (28, 28)), data_range=1.0 - 0.0)
+    sq_mean[index] = square_mean(example_img, norm_mi)
+
+  show_all_images_one_row(zero_over_beta)
+
+  plot_vs_beta(test_accs, betas, "Test Accuracy vs. Beta", "Accuracy (%)")
+  plot_vs_beta(ssim, betas, "SSIM vs. Beta", "SSIM")
+  plot_vs_beta(sq_mean, betas, "Square Mean over Pixels vs. Beta", "Square Mean")
+  pdb.set_trace()
+  print("end")
+
+def average_images(images, labels):
+  avg_imgs = np.zeros((10, IMG_COLS * IMG_ROWS))
+
+  for i in range(10):
+    indices = np.where(labels == i)
+    imgs_for_label = images[indices]
+    avg_imgs[i] = 1/imgs_for_label.shape[0] * np.sum(imgs_for_label, axis=0)
+
+  return avg_imgs 
+
+def square_mean(img1, img2):
+  img1 = np.reshape(img1, -1)
+  img2 = np.reshape(img2, -1)
+
+  diff = img1 - img2
+  diff_sq = np.square(diff)
+
+  multiplier = 1 / (IMG_ROWS*IMG_COLS)
+
+  return multiplier * np.sum(diff_sq)
 
 #Will not run when file is imported by other files
 if __name__ == '__main__':
-  # betas = [0.0, 1., 10., 15., 20.]
-  # test_accs = np.zeros(len(betas))
-  # # Iterate through beta
-  # for i,beta in enumerate(betas):
-  #   test_accs[i] = train(beta,0.01, 20000, 250)
+  betas = [0.0, 1., 10., 15., 20.]
 
-  # Iterate through rate
-  rates = [0.001, 0.002, 0.004, 0.005, 0.008, 0.01, 0.05, 0.1]
-  test_accs = np.zeros(len(rates))
-  for i,rate in enumerate(rates):
-    test_accs[i] = train(0,rate, 30000, 300)
+  test_accs = np.zeros(len(betas))
+  acc, inverted_images = train(1, 0.01, 200, 100)
+  for i in range(10):
+    show_image(inverted_images[i])
+  # Iterate through beta
+#   for i,beta in enumerate(betas):
+#     test_accs[i] = train(beta,0.01, 200, 250)
 
   np.save("logreg_acc_rate0", test_accs)
 

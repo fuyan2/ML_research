@@ -71,9 +71,8 @@ LAMBDA = 0.06
 
 tf.reset_default_graph()
 mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
-x = tf.placeholder(tf.float32, shape=[None, IMG_ROWS, IMG_COLS])
-x = tf.reshape(x, [-1,IMG_ROWS, IMG_ROWS,1])
-x_flat = tf.reshape(x, [-1, IMG_ROWS*IMG_COLS])
+x = tf.placeholder(tf.float32, shape=[None, IMG_ROWS*IMG_COLS])
+x_in = tf.reshape(x , [-1,IMG_ROWS, IMG_ROWS,1])
 y = tf.placeholder(tf.float32, shape=[None, 10])
 
 def layer(input, num_units):
@@ -116,7 +115,7 @@ out_b = tf.Variable(tf.constant(0.1, shape=[NUM_LABEL]), name='out_b')
 
 # Build CNN graph
 # First Conv Layer with relu activation and max pool
-conv_xw1 = tf.nn.conv2d(x,conv_w1,strides=[1, 1, 1, 1], padding='SAME')
+conv_xw1 = tf.nn.conv2d(x_in,conv_w1,strides=[1, 1, 1, 1], padding='SAME')
 conv_z1 = tf.nn.relu(conv_xw1 + conv_b1)
 conv_out1 = tf.nn.max_pool(conv_z1, ksize=[1, 2, 2, 1],strides=[1, 2, 2, 1], padding='SAME')
 
@@ -147,17 +146,20 @@ inv_weights = {
 
 inv_x = inverter(y, model_weights)
 #Calculate loss
-inv_loss = tf.losses.mean_squared_error(labels=x_flat, predictions=inv_x)
+inv_loss = tf.losses.mean_squared_error(labels=x, predictions=inv_x)
 class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_ml))
-mi_loss = tf.losses.mean_squared_error(labels=x_flat, predictions=tf.tanh(inv_x))
+mi_loss = tf.losses.mean_squared_error(labels=x, predictions=tf.tanh(inv_x))
 # calculate prediction accuracy
 correct = tf.equal(tf.argmax(y_ml, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
 def train(loss_beta, learning_rate, Epoch, Batch):
   total_loss = class_loss - loss_beta * mi_loss
-  model_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(total_loss, var_list=[w,b])
-  inverter_optimizer = tf.train.GradientDescentOptimizer(0.01).minimize(inv_loss)
+  steps_per_batch = int(mnist.train.num_examples / BATCH_SIZE)
+  global_step = tf.train.get_or_create_global_step()
+  learning_rate = tf.train.exponential_decay(1e-3, global_step, decay_steps=2*steps_per_batch, decay_rate=0.97, staircase=True)
+  model_optimizer = tf.train.AdamOptimizer(learning_rate).minimize(total_loss, var_list=[conv_w1, conv_w2, conv_b1, conv_b2, full_w, full_b, out_w, out_b])
+  inverter_optimizer = tf.train.GradientDescentOptimizer(0.1).minimize(inv_loss)
   init_vars = tf.global_variables_initializer()
   
   with tf.Session() as sess:
@@ -168,15 +170,16 @@ def train(loss_beta, learning_rate, Epoch, Batch):
     
     print('Beta %g Training...'%(loss_beta))
     for i in range(Epoch):
-      batch = mnist.train.next_batch(Batch)
-      model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
-      inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
-#       _,_,train_acc,train_total_loss, train_inv_loss, train_class_loss = sess.run([model_optimizer,inverter_optimizer, accuracy, total_loss, inv_loss, class_loss])
-      if i % 10 == 0:  
+      for step in range(steps_per_batch):
+        batch = mnist.train.next_batch(Batch)
+        model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
+        inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
+  #       _,_,train_acc,train_total_loss, train_inv_loss, train_class_loss = sess.run([model_optimizer,inverter_optimizer, accuracy, total_loss, inv_loss, class_loss])
+#       if i % 10 == 0:  
 #         print("step %g train accuracy is %g, total_loss is %g, inv_loss is %g, class_loss is %g"%(i, train_acc,train_total_loss, train_inv_loss, train_class_loss))
-        train_accuracy = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
-        valid_accuracy = accuracy.eval(feed_dict={x: mnist.validation.images, y: mnist.validation.labels })
-        print('step %d, training accuracy %g, validation accuracy %g' % (i, train_accuracy,valid_accuracy))    
+      train_accuracy = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
+      valid_accuracy = accuracy.eval(feed_dict={x: mnist.validation.images, y: mnist.validation.labels })
+      print('step %d, training accuracy %g, validation accuracy %g' % (i, train_accuracy,valid_accuracy))    
     test_acc = accuracy.eval(feed_dict={x: mnist.test.images, y: mnist.test.labels })
 
     # initialise iterator with test data
@@ -239,7 +242,7 @@ if __name__ == '__main__':
   betas = [0.0, 1., 10., 15., 20.]
 
   test_accs = np.zeros(len(betas))
-  acc, inverted_images = train(1, 0.1, 250, 100)
+  acc, inverted_images = train(0.001, 0.1, 30, 200)
   for i in range(10):
     show_image(inverted_images[i])
   # Iterate through beta
