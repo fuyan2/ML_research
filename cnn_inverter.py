@@ -24,13 +24,21 @@ from tensorflow.examples.tutorials.mnist import input_data
 import math
 inf = math.inf
 
-tf.reset_default_graph()
 tf.set_random_seed(1)
-#Defining Initial Parameters
+
+#Graph Structure
 IMG_ROWS = 28
 IMG_COLS = 28
 NUM_LABEL = 10
 INV_HIDDEN = 5000
+NUM_CHANNEL = 1 # Black white image
+FILTER_SIZE = 5 # Use 5x5 filter for all conv layer
+DEPTH_1 = 32 # num output feature maps for first layer
+DEPTH_2 = 64
+HIDDEN_UNIT = 1024
+CONV_OUT = 7 # convolution output image dimension, calculate based on previous parameters
+
+# Initial training coefficient
 EPOCHS = 100
 learning_rate = 0.1
 loss_beta = 0.003
@@ -40,8 +48,32 @@ BETA = 5
 GAMMA = 1
 LAMBDA = 0.06
 
+# #Flatten input dataset
+# mnist = tf.keras.datasets.mnist
+# (x_train, y_train),(x_test, y_test) = mnist.load_data()
+# x_train = np.reshape(x_train, [x_train.shape[0], -1])
+# x_test = np.reshape(x_test, [x_test.shape[0], -1])
+# y_train = np.reshape(y_train, [y_train.shape[0], -1])
+# y_test = np.reshape(y_test, [y_test.shape[0], -1])
+
+# #construct dataset
+# features = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
+# labels = tf.placeholder(tf.int32, shape=[None, 1])
+# batch_size = tf.placeholder(tf.int64)
+# sample_size = tf.placeholder(tf.int64)
+# dataset = tf.data.Dataset.from_tensor_slices((features, labels))
+# dataset = dataset.shuffle(sample_size, reshuffle_each_iteration=True)
+# dataset = dataset.batch(batch_size).repeat()
+
+# iter = dataset.make_initializable_iterator()
+# x, y_ = iter.get_next()
+# y = tf.one_hot(tf.reshape(y_,[-1]), NUM_LABEL)
+
+tf.reset_default_graph()
 mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
-x = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
+x = tf.placeholder(tf.float32, shape=[None, IMG_ROWS, IMG_COLS])
+x = tf.reshape(x, [-1,IMG_ROWS, IMG_ROWS,1])
+x_flat = tf.reshape(x, [-1, IMG_ROWS*IMG_COLS])
 y = tf.placeholder(tf.float32, shape=[None, 10])
 
 def layer(input, num_units):
@@ -66,12 +98,44 @@ def inverter(y, model_weights):
   return rect
 
 #Build Logistic Layer
-with tf.name_scope("logistic_layer"):
-  w,b,z = layer(x,NUM_LABEL)
-  y_ml = tf.nn.softmax(z)
+# with tf.name_scope("logistic_layer"):
+#   w,b,z = layer(x,NUM_LABEL)
+#   y_ml = tf.nn.softmax(z)
+
+# Create CNN weights
+conv_w1 = tf.get_variable('cw1', shape=[FILTER_SIZE, FILTER_SIZE, NUM_CHANNEL, DEPTH_1])
+conv_w2 = tf.get_variable('cw2', shape=[FILTER_SIZE, FILTER_SIZE, DEPTH_1, DEPTH_2])
+conv_b1 = tf.Variable(tf.constant(0.1, shape=[DEPTH_1]), name='b1') # Why initialize to 0.1?
+conv_b2 = tf.Variable(tf.constant(0.1, shape=[DEPTH_2]), name='b2')
+
+full_w = tf.get_variable("full_w", [CONV_OUT*CONV_OUT*DEPTH_2, HIDDEN_UNIT])
+full_b = tf.Variable(tf.constant(0.1, shape=[HIDDEN_UNIT]), name='full_b')
+
+out_w = tf.get_variable('out_w', [HIDDEN_UNIT,NUM_LABEL])
+out_b = tf.Variable(tf.constant(0.1, shape=[NUM_LABEL]), name='out_b')
+
+# Build CNN graph
+# First Conv Layer with relu activation and max pool
+conv_xw1 = tf.nn.conv2d(x,conv_w1,strides=[1, 1, 1, 1], padding='SAME')
+conv_z1 = tf.nn.relu(conv_xw1 + conv_b1)
+conv_out1 = tf.nn.max_pool(conv_z1, ksize=[1, 2, 2, 1],strides=[1, 2, 2, 1], padding='SAME')
+
+# Second Conv Layer with relu activation and max pool
+conv_xw2 = tf.nn.conv2d(conv_out1, conv_w2,strides=[1, 1, 1, 1], padding='SAME')
+conv_z2 = tf.nn.relu(conv_xw2 + conv_b2)
+conv_out2 = tf.nn.max_pool(conv_z2, ksize=[1, 2, 2, 1],strides=[1, 2, 2, 1], padding='SAME')
+conv_out2_flat = tf.reshape(conv_out2, [-1, CONV_OUT*CONV_OUT*DEPTH_2])
+# Fully Connected Layer with Relu Activation
+full_out = tf.nn.relu(tf.matmul(conv_out2_flat, full_w) + full_b)
+
+# Output Layer
+y_ml = tf.nn.softmax(tf.matmul(full_out, out_w) + out_b)
+
 
 #Build Inverter Regularizer
-model_weights = tf.concat([tf.reshape(w,[1, -1]),tf.reshape(b,[1, -1])], 1)
+model_weights = tf.concat([tf.reshape(out_w,[1, -1]),tf.reshape(out_b,[1, -1])], 1)
+
+
 # print(model_weights)
 inv_weights = {
   'w_model': tf.get_variable("w_model",[tf.reshape(model_weights, [-1]).shape[0], INV_HIDDEN]),
@@ -83,9 +147,9 @@ inv_weights = {
 
 inv_x = inverter(y, model_weights)
 #Calculate loss
-inv_loss = tf.losses.mean_squared_error(labels=x, predictions=inv_x)
+inv_loss = tf.losses.mean_squared_error(labels=x_flat, predictions=inv_x)
 class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_ml))
-mi_loss = tf.losses.mean_squared_error(labels=x, predictions=tf.tanh(inv_x))
+mi_loss = tf.losses.mean_squared_error(labels=x_flat, predictions=tf.tanh(inv_x))
 # calculate prediction accuracy
 correct = tf.equal(tf.argmax(y_ml, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
