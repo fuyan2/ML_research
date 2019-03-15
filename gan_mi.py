@@ -24,8 +24,7 @@ learning_rate = 0.0002
 
 # Network Params
 noise_dim = 100 # Noise data points
-label_dim = 10 #10 labels
-NUM_CHANNEL = 1
+NUM_LABEL = 10 #10 labels
 
 tf.reset_default_graph()
 tf.set_random_seed(1)
@@ -36,7 +35,7 @@ def glorot_init(shape):
   
 class Generator:
   # Generator Parameters
-  linear_w = tf.Variable(glorot_init([noise_dim+label_dim, 7*7*256]))
+  linear_w = tf.Variable(glorot_init([noise_dim+NUM_LABEL, 7*7*256]))
   linear_b = tf.Variable(glorot_init([7*7*256]))
   deconv_w1 = tf.Variable(glorot_init([4, 4, 128, 256]))
   deconv_w2 = tf.Variable(glorot_init([4, 4, 64, 128]))
@@ -95,7 +94,7 @@ class Discriminator:
 gen_input = tf.placeholder(tf.float32, shape=[None, noise_dim], name='input_noise')
 x = tf.placeholder(tf.float32, shape=[None, 28*28])
 disc_input = tf.reshape(x , [-1,28, 28,1])
-label_input = tf.placeholder(tf.float32, shape=[None, label_dim], name='label_input')
+label_input = tf.placeholder(tf.float32, shape=[None, NUM_LABEL], name='label_input')
 # Build Generator Network
 generator = Generator()
 gen_sample = generator.build(gen_input,label_input)
