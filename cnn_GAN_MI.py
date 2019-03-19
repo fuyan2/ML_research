@@ -218,8 +218,8 @@ def train_GAN_MI(sess, num_steps, batch_size):
     z = np.random.uniform(-1., 1., size=[batch_size, noise_dim])
 
     # Train
-
-    feed_dict = {disc_input: batch_x,  gen_input: z, x: gen_sample}
+    x_mi = sess.run(gen_sample, feed_dict={gen_input:z}) 
+    feed_dict = {disc_input: batch_x,  gen_input: z, x: x_mi}
     _, gl, dl = sess.run([train_disc, gen_loss, disc_loss],
                             feed_dict=feed_dict)
     #train one generator for every ten discriminator
@@ -247,6 +247,7 @@ def train_GAN_MI(sess, num_steps, batch_size):
 
   f.show()
   plt.draw()
+  plt.savefig('GAN_MI')
 
 #Will not run when file is imported by other files
 if __name__ == '__main__':
