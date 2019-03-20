@@ -10,7 +10,6 @@ from tensorflow.examples.tutorials.mnist import input_data
 
 # Training Params
 num_steps = 100000
-batch_size = 128
 learning_rate = 0.0002
 
 # Network Params
@@ -23,7 +22,8 @@ def glorot_init(shape):
   
 class Generator:
   # Generator Parameters
-  def __init__(self, noise_dim, NUM_LABEL):
+  def __init__(self, noise_dim, NUM_LABEL, batch_size):
+    self.batch_size = batch_size
     self.linear_w = tf.Variable(glorot_init([noise_dim+NUM_LABEL, 7*7*256]),name='glw')
     self.linear_b = tf.Variable(glorot_init([7*7*256]),name='glb')
     self.deconv_w1 = tf.Variable(glorot_init([4, 4, 128, 256]),name='gdw1')
@@ -38,11 +38,11 @@ class Generator:
     z_y = tf.concat([z,y],1)
     linear_h = tf.matmul(z_y,self.linear_w)+self.linear_b
     linear_h_reshape = tf.reshape(linear_h , [-1,7, 7,256])  
-    deconv_xw1 = tf.nn.conv2d_transpose(linear_h_reshape, self.deconv_w1,output_shape=[batch_size,14,14,128], strides=[1, 2, 2, 1])
+    deconv_xw1 = tf.nn.conv2d_transpose(linear_h_reshape, self.deconv_w1,output_shape=[self.batch_size,14,14,128], strides=[1, 2, 2, 1])
     deconv_h1 = tf.nn.leaky_relu(deconv_xw1 + self.deconv_b1)
-    deconv_xw2 = tf.nn.conv2d_transpose(deconv_h1, self.deconv_w2,output_shape=[batch_size,28,28,64], strides=[1, 2, 2, 1])
+    deconv_xw2 = tf.nn.conv2d_transpose(deconv_h1, self.deconv_w2,output_shape=[self.batch_size,28,28,64], strides=[1, 2, 2, 1])
     deconv_h2 = tf.nn.leaky_relu(deconv_xw2 + self.deconv_b2)
-    deconv_xw3 = tf.nn.conv2d_transpose(deconv_h2, self.deconv_w3,output_shape=[batch_size,28,28,1], strides=[1, 1, 1, 1])
+    deconv_xw3 = tf.nn.conv2d_transpose(deconv_h2, self.deconv_w3,output_shape=[self.batch_size,28,28,1], strides=[1, 1, 1, 1])
     deconv_h3 = tf.nn.leaky_relu(deconv_xw3 + self.deconv_b3)
     out_layer = tf.nn.sigmoid(deconv_h3)
     return out_layer
@@ -81,7 +81,7 @@ class Discriminator:
 
 
 
-def train_GAN_MI():
+def train_gan():
   mnist = input_data.read_data_sets("/tmp/data/", one_hot=True)
   tf.reset_default_graph()
   tf.set_random_seed(1)
@@ -165,4 +165,4 @@ def train_GAN_MI():
       plt.waitforbuttonpress()
       
 if __name__ == '__main__':
-  train_GAN_MI()
+  train_gan()

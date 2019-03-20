@@ -27,6 +27,7 @@ import math
 from gan_mi import Generator, Discriminator
 
 
+
 #Graph Structure
 IMG_ROWS = 28
 IMG_COLS = 28
@@ -61,11 +62,12 @@ INV_HIDDEN = 5000
 EPOCHS = 100
 learning_rate = 0.1
 loss_beta = 0.003
-BATCH_SIZE = 250
+gan_batch_size = 200
 
 mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
 x = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
 y = tf.placeholder(tf.float32, shape=[None, 10])
+
 
 def layer(input, num_units):
   W = tf.Variable(tf.zeros([input.shape[1], num_units], tf.float32), name="w")
@@ -119,16 +121,16 @@ accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 # Network Inputs
 gen_input = tf.placeholder(tf.float32, shape=[None, noise_dim], name='input_noise')
 disc_input = tf.placeholder(tf.float32, shape=[None, 28*28])
-disc_input = tf.reshape(disc_input , [-1,28, 28,1])
+disc_input_reshape = tf.reshape(disc_input , [-1,28, 28,1])
 desired_label = tf.placeholder(tf.float32, shape=[None,10], name='desired_label') #generate image for label 2
 # Build Generator Network
-generator = Generator(noise_dim, NUM_LABEL)
-gen_sample = generator.build(gen_input,desired_label)
+gen = Generator(noise_dim, NUM_LABEL, gan_batch_size)
+gen_sample = gen.build(gen_input,desired_label)
 
 # Build 2 Discriminator Networks (one from noise input, one from generated samples)
-discriminator = Discriminator()
-disc_real = discriminator.build(disc_input)
-disc_fake = discriminator.build(gen_sample)
+discrim = Discriminator()
+disc_real = discrim.build(disc_input_reshape)
+disc_fake = discrim.build(gen_sample)
 
 # Build Loss
 gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=desired_label, logits=y_ml))
@@ -140,16 +142,16 @@ optimizer_gen = tf.train.AdamOptimizer(learning_rate=learning_rate)
 optimizer_disc = tf.train.AdamOptimizer(learning_rate=learning_rate)
 
 # Training Variables for each optimizer
-# Generator Network Variables
-gen_vars = [Generator.linear_w, Generator.linear_b, Generator.deconv_w1, Generator.deconv_w2, Generator.deconv_w3, 
-            Generator.deconv_b1, Generator.deconv_b2, Generator.deconv_b3]
+# gen Network Variables
+gen_vars = [gen.linear_w, gen.linear_b, gen.deconv_w1, gen.deconv_w2, gen.deconv_w3, 
+            gen.deconv_b1, gen.deconv_b2, gen.deconv_b3]
 # Discriminator Network Variables
-disc_vars = [Discriminator.conv_w1, Discriminator.conv_w2, Discriminator.conv_w3, Discriminator.conv_w4, Discriminator.conv_w5,
-            Discriminator.conv_b1, Discriminator.conv_b2, Discriminator.conv_b3, Discriminator.conv_b4, Discriminator.conv_b5,
-            Discriminator.linear_w, Discriminator.linear_b]
+disc_vars = [discrim.conv_w1, discrim.conv_w2, discrim.conv_w3, discrim.conv_w4, discrim.conv_w5,
+            discrim.conv_b1, discrim.conv_b2, discrim.conv_b3, discrim.conv_b4, discrim.conv_b5,
+            discrim.linear_w, discrim.linear_b]
 
 # Create training operations
-train_gen = optimizer_gen.minimize(gen_loss, var_list=gen_vars)
+train_GAN = optimizer_gen.minimize(gen_loss, var_list=gen_vars)
 train_disc = optimizer_disc.minimize(disc_loss, var_list=disc_vars)
 
 def train(loss_beta, learning_rate, Epoch, Batch):
@@ -167,7 +169,7 @@ def train(loss_beta, learning_rate, Epoch, Batch):
       batch = mnist.train.next_batch(Batch)
       model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
 #       inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
-      if i % 1000 == 0:  
+      if i % 100 == 0:  
         train_accuracy = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
         valid_accuracy = accuracy.eval(feed_dict={x: mnist.validation.images, y: mnist.validation.labels })
         print('step %d, training accuracy %g, validation accuracy %g' % (i, train_accuracy,valid_accuracy))    
@@ -175,7 +177,7 @@ def train(loss_beta, learning_rate, Epoch, Batch):
     test_acc = accuracy.eval(feed_dict={x: mnist.test.images, y: mnist.test.labels })
     print("beta is %g, test accuracy is %g"%(loss_beta, test_acc))
     
-    train_GAN_MI(sess, y_ml, 30, 100) 
+    train_GAN_MI(sess, 100) 
 
     return test_acc
 
@@ -183,37 +185,37 @@ def show_image(array):
   adv_img = plt.imshow(np.reshape(array, (28, 28)), cmap="gray", vmin=array.min(), vmax=array.max())
   plt.show(adv_img)
 
-def train_GAN_MI(sess, num_steps, batch_size):
+def train_GAN_MI(sess, num_steps):
+  d_label = np.zeros([gan_batch_size, 10])
+  d_label[:,2] = 1
+
   for i in range(1, num_steps+1):
     # Prepare Data
     # Get the next batch of MNIST data (only images are needed, not labels)
-    batch_x, batch_y = mnist.train.next_batch(batch_size)
-    #Mask Out images of 2
-    Mask = tf.equal(batch_y[:,2], tf.zeros(batch_y.shape[0]))
-    batch_x = tf.boolean_mask(batch_x, Mask)
-    # Generate noise to feed to the generator
-    z = np.random.uniform(-1., 1., size=[batch_size, noise_dim])
-    d_label = np.zeros([batch_size, 10])
-    d_label[:,2] = 1
+    batch_x, batch_y = mnist.train.next_batch(gan_batch_size)
+
+    z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
     # Train
-    x_mi = sess.run(gen_sample, feed_dict={gen_input:z}) 
-    feed_dict = {disc_input: batch_x,  gen_input: z, x: x_mi, desired_label: d_label}
+    gen_mi = sess.run(gen_sample, feed_dict={gen_input:z, desired_label: d_label}) 
+    gen_mi = np.reshape(gen_mi, [gan_batch_size, 28*28])
+
+    # print('disc_input',disc_input.shape, 'batch_x',batch_x.shape, 'x',x.shape,  'gen_mi', gen_mi.shape)
     _, gl, dl = sess.run([train_disc, gen_loss, disc_loss],
-                            feed_dict=feed_dict)
+                            feed_dict={disc_input: batch_x,  gen_input: z, x: gen_mi, desired_label: d_label})
     #train one generator for every ten discriminator
     if i % 10 == 0:
       _, gl, dl = sess.run([train_GAN, gen_loss, disc_loss],
-                            feed_dict=feed_dict)
+                            feed_dict={disc_input: batch_x,  gen_input: z, x: gen_mi, desired_label: d_label})
 
-    if i % 1000 == 0 or i == 1:
-        print('Step %i: Generator Loss: %f, Discriminator Loss: %f' % (i, gl, dl))
+    # if i % 100 == 0 or i == 1:
+    print('Step %i: Generator Loss: %f, Discriminator Loss: %f' % (i, gl, dl))
             
   # Generate images from noise, using the generator network.
   f, a = plt.subplots(4, 10, figsize=(10, 4))
   for i in range(10):
       # Noise input.
       z = np.random.uniform(-1., 1., size=[4, noise_dim])
-      g = sess.run([gen_sample], feed_dict={gen_input: z})
+      g = sess.run([gen_sample], feed_dict={gen_input: z, desired_label: d_label})
       g = np.reshape(g, newshape=(4, 28, 28, 1))
       # Reverse colours for better display
       g = -1 * (g - 1)
@@ -229,4 +231,4 @@ def train_GAN_MI(sess, num_steps, batch_size):
 
 #Will not run when file is imported by other files
 if __name__ == '__main__':
-  acc = train(0.001, 0.1, 250, 100)
+  acc = train(0.001, 0.1, 8000, 250)
