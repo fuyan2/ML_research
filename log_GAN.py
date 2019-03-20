@@ -25,7 +25,7 @@ from skimage.measure import compare_ssim
 from tensorflow.examples.tutorials.mnist import input_data
 import math
 from gan_mi import Generator, Discriminator
-inf = math.inf
+
 
 #Graph Structure
 IMG_ROWS = 28
@@ -38,7 +38,7 @@ DEPTH_1 = 32 # num output feature maps for first layer
 DEPTH_2 = 64
 HIDDEN_UNIT = 1024
 CONV_OUT = 7 # convolution output image dimension, calculate based on previous parameters
-noise_dim = 10 # Noise data points
+noise_dim = 100 # Noise data points
 
 # Initial training coefficient
 EPOCHS = 100
@@ -52,7 +52,7 @@ LAMBDA = 0.06
 
 
 tf.reset_default_graph()
-tf.set_random_seed(1)
+# tf.set_random_seed(1)
 #Defining Initial Parameters
 IMG_ROWS = 28
 IMG_COLS = 28
@@ -63,30 +63,9 @@ learning_rate = 0.1
 loss_beta = 0.003
 BATCH_SIZE = 250
 
-#Flatten input dataset
-mnist = tf.keras.datasets.mnist
-(x_train, y_train),(x_test, y_test) = mnist.load_data()
-x_train = np.reshape(x_train, [x_train.shape[0], -1])
-x_test = np.reshape(x_test, [x_test.shape[0], -1])
-y_train = np.reshape(y_train, [y_train.shape[0], -1])
-y_test = np.reshape(y_test, [y_test.shape[0], -1])
-
-#construct dataset
-features = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
-labels = tf.placeholder(tf.int32, shape=[None, 1])
-batch_size = tf.placeholder(tf.int64)
-sample_size = tf.placeholder(tf.int64)
-dataset = tf.data.Dataset.from_tensor_slices((features, labels))
-dataset = dataset.shuffle(sample_size, reshuffle_each_iteration=True)
-dataset = dataset.batch(batch_size).repeat()
-
-iter = dataset.make_initializable_iterator()
-x, y_ = iter.get_next()
-y = tf.one_hot(tf.reshape(y_,[-1]), NUM_LABEL)
-
-# mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
-# x = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
-# y = tf.placeholder(tf.float32, shape=[None, 10])
+mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
+x = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
+y = tf.placeholder(tf.float32, shape=[None, 10])
 
 def layer(input, num_units):
   W = tf.Variable(tf.zeros([input.shape[1], num_units], tf.float32), name="w")
@@ -141,10 +120,9 @@ accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 gen_input = tf.placeholder(tf.float32, shape=[None, noise_dim], name='input_noise')
 disc_input = tf.placeholder(tf.float32, shape=[None, 28*28])
 disc_input = tf.reshape(disc_input , [-1,28, 28,1])
-# label_input = tf.placeholder(tf.float32, shape=[None, NUM_LABEL], name='label_input')
-desired_label = tf.constant([0, 0, 1, 0, 0, 0, 0, 0, 0, 0]) #generate image for label 2
+desired_label = tf.placeholder(tf.float32, shape=[None,10], name='desired_label') #generate image for label 2
 # Build Generator Network
-generator = Generator()
+generator = Generator(noise_dim, NUM_LABEL)
 gen_sample = generator.build(gen_input,desired_label)
 
 # Build 2 Discriminator Networks (one from noise input, one from generated samples)
@@ -163,7 +141,7 @@ optimizer_disc = tf.train.AdamOptimizer(learning_rate=learning_rate)
 
 # Training Variables for each optimizer
 # Generator Network Variables
-gen_vars = [Generator.linear_w, Generator.linear_w, Generator.deconv_w1, Generator.deconv_w2, Generator.deconv_w3, 
+gen_vars = [Generator.linear_w, Generator.linear_b, Generator.deconv_w1, Generator.deconv_w2, Generator.deconv_w3, 
             Generator.deconv_b1, Generator.deconv_b2, Generator.deconv_b3]
 # Discriminator Network Variables
 disc_vars = [Discriminator.conv_w1, Discriminator.conv_w2, Discriminator.conv_w3, Discriminator.conv_w4, Discriminator.conv_w5,
@@ -175,33 +153,26 @@ train_gen = optimizer_gen.minimize(gen_loss, var_list=gen_vars)
 train_disc = optimizer_disc.minimize(disc_loss, var_list=disc_vars)
 
 def train(loss_beta, learning_rate, Epoch, Batch):
-  total_loss = class_loss - loss_beta * mi_loss
+#   total_loss = class_loss - loss_beta * mi_loss
+  total_loss = class_loss
   model_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(total_loss, var_list=[w,b])
-  inverter_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(inv_loss)
+#   inverter_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(inv_loss)
   init_vars = tf.global_variables_initializer()
   
   with tf.Session() as sess:
     sess.run(init_vars)
    
-    # initialise iterator with train data
-    sess.run(iter.initializer, feed_dict = {features: x_train, labels: y_train, batch_size: Batch, sample_size: 10000})
-    
     print('Beta %g rate %g batch %g Training...'%(loss_beta, learning_rate, Batch))
     for i in range(Epoch):
-#       batch = mnist.train.next_batch(Batch)
-#       model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
+      batch = mnist.train.next_batch(Batch)
+      model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
 #       inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
-      _,_,train_acc,train_total_loss, train_inv_loss, train_class_loss = sess.run([model_optimizer,inverter_optimizer, accuracy, total_loss, inv_loss, class_loss])
       if i % 1000 == 0:  
-        print("step %g train accuracy is %g, total_loss is %g, inv_loss is %g, class_loss is %g"%(i, train_acc,train_total_loss, train_inv_loss, train_class_loss))
-#         train_accuracy = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
-#         valid_accuracy = accuracy.eval(feed_dict={x: mnist.validation.images, y: mnist.validation.labels })
-#         print('step %d, training accuracy %g, validation accuracy %g' % (i, train_accuracy,valid_accuracy))    
-#     test_acc = accuracy.eval(feed_dict={x: mnist.test.images, y: mnist.test.labels })
-
-    # initialise iterator with test data
-    sess.run(iter.initializer, feed_dict = {features: x_test, labels: y_test, batch_size: y_test.shape[0], sample_size: 1})
-    test_acc = sess.run(accuracy)
+        train_accuracy = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
+        valid_accuracy = accuracy.eval(feed_dict={x: mnist.validation.images, y: mnist.validation.labels })
+        print('step %d, training accuracy %g, validation accuracy %g' % (i, train_accuracy,valid_accuracy))    
+    
+    test_acc = accuracy.eval(feed_dict={x: mnist.test.images, y: mnist.test.labels })
     print("beta is %g, test accuracy is %g"%(loss_beta, test_acc))
     
     train_GAN_MI(sess, y_ml, 30, 100) 
@@ -222,10 +193,11 @@ def train_GAN_MI(sess, num_steps, batch_size):
     batch_x = tf.boolean_mask(batch_x, Mask)
     # Generate noise to feed to the generator
     z = np.random.uniform(-1., 1., size=[batch_size, noise_dim])
-
+    d_label = np.zeros([batch_size, 10])
+    d_label[:,2] = 1
     # Train
     x_mi = sess.run(gen_sample, feed_dict={gen_input:z}) 
-    feed_dict = {disc_input: batch_x,  gen_input: z, x: x_mi}
+    feed_dict = {disc_input: batch_x,  gen_input: z, x: x_mi, desired_label: d_label}
     _, gl, dl = sess.run([train_disc, gen_loss, disc_loss],
                             feed_dict=feed_dict)
     #train one generator for every ten discriminator
