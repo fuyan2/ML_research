@@ -39,7 +39,7 @@ DEPTH_1 = 32 # num output feature maps for first layer
 DEPTH_2 = 64
 HIDDEN_UNIT = 1024
 CONV_OUT = 7 # convolution output image dimension, calculate based on previous parameters
-noise_dim = 100 # Noise data points
+noise_dim = 10 # Noise data points
 gan_batch_size = 200
 
 # Initial training coefficient
@@ -129,8 +129,8 @@ disc_fake = discrim.build(gen_sample)
 gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=desired_label, logits=y_ml))
 # real_loss = -tf.reduce_mean(tf.log(disc_real))
 # fake_loss = -tf.reduce_mean(tf.log(disc_fake))
-gen_loss = -tf.reduce_mean(tf.log(disc_fake)) + gan_class_loss
-disc_loss = -tf.reduce_mean(tf.log(disc_real) + tf.log(1. - disc_fake))
+gen_loss = -tf.reduce_mean(tf.log(tf.maximum(0.001, disc_fake))) + gan_class_loss
+disc_loss = -tf.reduce_mean(tf.log(tf.maximum(0.001, disc_real)) + tf.log(tf.maximum(0.001, 1. - disc_fake)))
 
 # Build Optimizers
 optimizer_gen = tf.train.AdamOptimizer(learning_rate=gan_learning_rate)
@@ -172,7 +172,7 @@ def train(loss_beta, learning_rate, Epoch, Batch):
     test_acc = accuracy.eval(feed_dict={x: mnist.test.images, y: mnist.test.labels })
     print("beta is %g, test accuracy is %g"%(loss_beta, test_acc))
     
-    train_GAN_MI(sess, 100000) 
+    train_GAN_MI(sess, 20000) 
 
     return test_acc
 
@@ -203,7 +203,7 @@ def train_GAN_MI(sess, num_steps):
     #   _, gl, dl= sess.run([train_GAN, gen_loss, disc_loss],
     #                         feed_dict={disc_input: batch_x,  gen_input: z, x: gen_mi, desired_label: d_label})
 
-    if i % 1000 == 0 or i == 1:
+    if i % 100 == 0 or i == 1:
       print('Step %i: Generator Loss: %f, Discriminator Loss: %f' % (i, gl, dl))
             
   # Generate images from noise, using the generator network.
@@ -233,4 +233,4 @@ def train_GAN_MI(sess, num_steps):
 
 #Will not run when file is imported by other files
 if __name__ == '__main__':
-  acc = train(0.001, 0.1, 10000, 250)
+  acc = train(0.001, 0.1, 8000, 250)
