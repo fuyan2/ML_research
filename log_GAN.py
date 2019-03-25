@@ -27,7 +27,6 @@ import math
 from gan_mi import Generator, Discriminator
 
 
-
 #Graph Structure
 IMG_ROWS = 28
 IMG_COLS = 28
@@ -56,10 +55,35 @@ LAMBDA = 0.06
 tf.reset_default_graph()
 tf.set_random_seed(1)
 
+def mnist(type):
+    def parse_labels(filename):
+        with gzip.open(filename, 'rb') as fh:
+            magic, num_data = struct.unpack(">II", fh.read(8))
+            return np.array(array.array("B", fh.read()), dtype=np.uint8)
 
-mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
-x = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
-y = tf.placeholder(tf.float32, shape=[None, 10])
+    def parse_images(filename):
+        with gzip.open(filename, 'rb') as fh:
+            magic, num_data, rows, cols = struct.unpack(">IIII", fh.read(16))
+            return np.array(array.array("B", fh.read()), dtype=np.uint8).reshape(num_data, rows, cols)
+
+    train_images = parse_images('data/emnist-',type,'-train-images-idx3-ubyte.gz')
+    train_labels = parse_labels('data/emnist-',type,'-train-labels-idx1-ubyte.gz')
+    test_images  = parse_images('data/emnist-',type,'-test-images-idx3-ubyte.gz')
+    test_labels  = parse_labels('data/emnist-',type,'-test-labels-idx1-ubyte.gz')
+
+    return train_images, train_labels, test_images, test_labels
+
+
+def load_mnist(type):
+    partial_flatten = lambda x : np.reshape(x, (x.shape[0], np.prod(x.shape[1:])))
+    one_hot = lambda x, k: np.array(x[:,None] == np.arange(k)[None, :], dtype=int)
+    train_images, train_labels, test_images, test_labels = mnist(type)
+    train_images = partial_flatten(train_images) / 255.0
+    test_images  = partial_flatten(test_images)  / 255.0
+    train_labels = one_hot(train_labels, 10)
+    test_labels = one_hot(test_labels, 10)
+
+    return train_images, train_labels, test_images, test_labels
 
 
 def layer(input, num_units):
@@ -82,6 +106,18 @@ def inverter(y, model_weights):
   out_layer = tf.add(tf.matmul(rect, inv_weights['w_out']), inv_weights['b_out'])
   rect = lrelu(out_layer, 0.3)
   return rect
+
+#build dataset structure
+features = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
+labels = tf.placeholder(tf.int32, shape=[None, 10])
+batch_size = tf.placeholder(tf.int64)
+sample_size = tf.placeholder(tf.int64)
+dataset = tf.data.Dataset.from_tensor_slices((features, labels))
+dataset = dataset.shuffle(sample_size, reshuffle_each_iteration=True)
+dataset = dataset.batch(batch_size).repeat()
+
+iter = dataset.make_initializable_iterator()
+x, y = iter.get_next()
 
 #Build Logistic Layer
 with tf.name_scope("logistic_layer"):
@@ -155,21 +191,25 @@ def train(loss_beta, learning_rate, Epoch, Batch):
   model_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(total_loss, var_list=[w,b])
 #   inverter_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(inv_loss)
   init_vars = tf.global_variables_initializer()
-  
+  x_train, y_train, x_test, y_test = load_mnist('digits')
+
   with tf.Session() as sess:
     sess.run(init_vars)
-   
+    
+    # initialise iterator with train data
+    sess.run(iter.initializer, feed_dict = {features: x_train, labels: y_train, batch_size: Batch, sample_size: 10000})
+    
     print('Beta %g rate %g batch %g Training...'%(loss_beta, learning_rate, Batch))
     for i in range(Epoch):
-      batch = mnist.train.next_batch(Batch)
-      model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
-#       inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
+      # _, _ = sess.run(model_optimizer, inverter_optimizer)
+      _ = sess.run(model_optimizer)
       if i % 1000 == 0:  
-        train_accuracy = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
-        valid_accuracy = accuracy.eval(feed_dict={x: mnist.validation.images, y: mnist.validation.labels })
-        print('step %d, training accuracy %g, validation accuracy %g' % (i, train_accuracy,valid_accuracy))    
+        train_accuracy = sess.run(accuracy)     
+        print('step %d, training accuracy %g' % (i, train_accuracy))    
     
-    test_acc = accuracy.eval(feed_dict={x: mnist.test.images, y: mnist.test.labels })
+      # initialise iterator with test data
+    sess.run(iter.initializer, feed_dict = {features: x_test, labels: y_test, batch_size: y_test.shape[0], sample_size: 1})
+    test_acc = sess.run(accuracy)
     print("beta is %g, test accuracy is %g"%(loss_beta, test_acc))
     
     train_GAN_MI(sess, 20000) 
@@ -181,8 +221,10 @@ def show_image(array):
   plt.show(adv_img)
 
 def train_GAN_MI(sess, num_steps):
+  #load data
+  letters_db = load_mnist('letters')
   d_label = np.zeros([gan_batch_size, 10])
-  d_label[:,2] = 1
+  d_label[:,3] = 1
 
   for i in range(1, num_steps+1):
     # Prepare Data
@@ -212,7 +254,7 @@ def train_GAN_MI(sess, num_steps):
       # Noise input.
       z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
       d_label = np.zeros([gan_batch_size, 10])
-      d_label[:,2] = 1
+      d_label[:,3] = 1
       g = sess.run([gen_sample], feed_dict={gen_input: z, desired_label: d_label})
       g = np.array(g)
       g = np.reshape(g, newshape=(gan_batch_size, 28, 28, 1))
