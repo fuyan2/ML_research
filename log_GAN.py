@@ -26,7 +26,6 @@ import array
 
 from datetime import datetime
 from skimage.measure import compare_ssim
-from tensorflow.examples.tutorials.mnist import input_data
 import math
 from gan_mi import Generator, Discriminator
 
@@ -290,4 +289,4 @@ def train_GAN_MI(sess, num_steps):
 
 #Will not run when file is imported by other files
 if __name__ == '__main__':
-  acc = train(0.001, 0.1, 10000, 250)
+  acc = train(0.001, 0.1, 20000, 250)
