@@ -5,8 +5,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 
-# Import MNIST data
-from tensorflow.examples.tutorials.mnist import input_data
 
 # Training Params
 num_steps = 100000
