@@ -19,13 +19,17 @@ import matplotlib.image
 import pdb
 import copy
 import multiprocessing as mp
+import os
+import gzip
+import struct
+import array
+import copy
+import multiprocessing as mp
 
 from datetime import datetime
 from skimage.measure import compare_ssim
-from tensorflow.examples.tutorials.mnist import input_data
 import math
 from gan_mi import Generator, Discriminator
-inf = math.inf
 
 
 #GAN Graph Structure
@@ -47,6 +51,7 @@ GAN_CLASS_COE = 1.1
 # Initial training coefficient
 EPOCHS = 100
 learning_rate = 0.1
+gan_learning_rate = 0.0002
 loss_beta = 0.003
 BATCH_SIZE = 250
 ALPHA = 20000
@@ -56,13 +61,65 @@ LAMBDA = 0.06
 
 tf.set_random_seed(1)
 tf.reset_default_graph()
+def mnist(type):
+    def parse_labels(filename):
+        with gzip.open(filename, 'rb') as fh:
+            magic, num_data = struct.unpack(">II", fh.read(8))
+            return np.array(array.array("B", fh.read()), dtype=np.uint8)
 
-mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
-x = tf.placeholder(tf.float32, shape=[None, IMG_ROWS*IMG_COLS])
-x_in = tf.reshape(x , [-1,IMG_ROWS, IMG_ROWS,1])
-y = tf.placeholder(tf.float32, shape=[None, 10])
-# Network Inputs
-input_noise = tf.placeholder(tf.float32, shape=[None, NUM_LABEL], name='input_noise')
+    def parse_images(filename):
+        with gzip.open(filename, 'rb') as fh:
+            magic, num_data, rows, cols = struct.unpack(">IIII", fh.read(16))
+            return np.array(array.array("B", fh.read()), dtype=np.uint8).reshape(num_data, rows, cols)
+
+    train_images = parse_images('data/emnist-'+type+'-train-images-idx3-ubyte.gz')
+    train_labels = parse_labels('data/emnist-'+type+'-train-labels-idx1-ubyte.gz')
+    test_images  = parse_images('data/emnist-'+type+'-test-images-idx3-ubyte.gz')
+    test_labels  = parse_labels('data/emnist-'+type+'-test-labels-idx1-ubyte.gz')
+
+    return train_images, train_labels, test_images, test_labels
+
+
+def load_mnist(type):
+    partial_flatten = lambda x : np.reshape(x, (x.shape[0], np.prod(x.shape[1:])))
+    one_hot = lambda x, k: np.array(x[:,None] == np.arange(k)[None, :], dtype=int)
+    train_images, train_labels, test_images, test_labels = mnist(type)
+    train_images = partial_flatten(train_images) / 255.0
+    test_images  = partial_flatten(test_images)  / 255.0
+    train_labels = one_hot(train_labels, 10)
+    test_labels = one_hot(test_labels, 10)
+
+    return train_images, train_labels, test_images, test_labels
+
+def mnist(type):
+    def parse_labels(filename):
+        with gzip.open(filename, 'rb') as fh:
+            magic, num_data = struct.unpack(">II", fh.read(8))
+            return np.array(array.array("B", fh.read()), dtype=np.uint8)
+
+    def parse_images(filename):
+        with gzip.open(filename, 'rb') as fh:
+            magic, num_data, rows, cols = struct.unpack(">IIII", fh.read(16))
+            return np.array(array.array("B", fh.read()), dtype=np.uint8).reshape(num_data, rows, cols)
+
+    train_images = parse_images('data/emnist-'+type+'-train-images-idx3-ubyte.gz')
+    train_labels = parse_labels('data/emnist-'+type+'-train-labels-idx1-ubyte.gz')
+    test_images  = parse_images('data/emnist-'+type+'-test-images-idx3-ubyte.gz')
+    test_labels  = parse_labels('data/emnist-'+type+'-test-labels-idx1-ubyte.gz')
+
+    return train_images, train_labels, test_images, test_labels
+
+
+def load_mnist(type):
+    partial_flatten = lambda x : np.reshape(x, (x.shape[0], np.prod(x.shape[1:])))
+    one_hot = lambda x, k: np.array(x[:,None] == np.arange(k)[None, :], dtype=int)
+    train_images, train_labels, test_images, test_labels = mnist(type)
+    train_images = partial_flatten(train_images) / 255.0
+    test_images  = partial_flatten(test_images)  / 255.0
+    train_labels = one_hot(train_labels, 10)
+    test_labels = one_hot(test_labels, 10)
+
+    return train_images, train_labels, test_images, test_labels
 
 def layer(input, num_units):
   W = tf.Variable(tf.zeros([input.shape[1], num_units], tf.float32), name="w")
@@ -196,10 +253,10 @@ disc_vars = [discrim.conv_w1, discrim.conv_w2, discrim.conv_w3, discrim.conv_w4,
 train_GAN = optimizer_gen.minimize(gen_loss, var_list=gen_vars)
 train_disc = optimizer_disc.minimize(disc_loss, var_list=disc_vars)
 
-def train(loss_beta, learning_rate, Epoch, Batch, LABEL=None):
+def train(loss_beta, learning_rate, Epoch, Batch):
   # total_loss = class_loss - loss_beta * mi_loss
   total_loss = class_loss + loss_beta * tf.norm(model_weights)
-  steps_per_batch = int(mnist.train.num_examples / BATCH_SIZE)
+  steps_per_batch = int(digits_y_train.shape[0]/ BATCH_SIZE)
   global_step = tf.train.get_or_create_global_step()
   learn_rate = tf.train.exponential_decay(1e-3, global_step, decay_steps=2*steps_per_batch, decay_rate=0.97, staircase=True)
   model_optimizer = tf.train.AdamOptimizer(learn_rate).minimize(total_loss, var_list=[conv_w1, conv_w2, conv_b1, conv_b2, full_w, full_b, out_w, out_b])
@@ -216,9 +273,9 @@ def train(loss_beta, learning_rate, Epoch, Batch, LABEL=None):
     for i in range(Epoch*steps_per_batch):
       batch = sess.run(next_batch)
       model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
-        # inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
+      inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
   #       _,_,train_acc,train_total_loss, train_inv_loss, train_class_loss = sess.run([model_optimizer,inverter_optimizer, accuracy, total_loss, inv_loss, class_loss])
-      if i % 1000 == 0:  
+      if i % 10 == 0:  
         train_accuracy = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
         print('step %d, training accuracy %g' % (i, train_accuracy))    
 
@@ -229,13 +286,13 @@ def train(loss_beta, learning_rate, Epoch, Batch, LABEL=None):
     print("beta is %g, test accuracy is %g"%(loss_beta, test_acc))
     
     train_GAN_MI(sess, 80000) 
-    return test_acc, inverted_images
+    return test_acc
 
 def train_GAN_MI(sess, num_steps):
   d_label = np.zeros([gan_batch_size, 10])
   d_label[:,3] = 1
 
-  for i in range(1, num_steps+1):
+  for i in range(0, num_steps):
     # Prepare Data
      # initialise iterator with letters train data
     sess.run(iter.initializer, feed_dict = {features: letters_x_train, labels: letters_y_train, batch_size: gan_batch_size, sample_size: 10000})
@@ -257,7 +314,7 @@ def train_GAN_MI(sess, num_steps):
       _, gl, dl= sess.run([train_disc, gen_loss, disc_loss],
                             feed_dict={disc_input: batch_x,  gen_input: z, x: gen_mi, desired_label: d_label})
 
-    if i % 100 == 0 or i == 1:
+    if i % 100 == 0:
       print('Step %i: Generator Loss: %f, Discriminator Loss: %f' % (i, gl, dl))
             
   # Generate images from noise, using the generator network.
@@ -283,7 +340,7 @@ def train_GAN_MI(sess, num_steps):
 
   # f.show()
   plt.draw()
-  plt.savefig('LOG_INV_GAN_MI_5GEN_1DIS')
+  plt.savefig('CNN_INV_GAN_MI_5GEN_1DIS')
 
 
 def model_inversion(i, y_conv, sess, iterate):
@@ -374,7 +431,7 @@ def measure_over_beta(LABEL):
   image_over_beta = np.zeros((len(betas), IMG_ROWS*IMG_COLS))
   # Iterate through beta
   for i,beta in enumerate(betas):
-    test_accs[i], inverted_image = train(beta, 0.1, 30, 200, LABEL)
+    test_accs[i], inverted_image = train(beta, 0.1, 30, 200)
     norm_mi = (inverted_image + inverted_image.min()) * 1 /inverted_image.max()
     image_over_beta[i] = norm_mi
     ssim[i] = compare_ssim(np.reshape(average_image, (28, 28)), np.reshape(norm_mi, (28, 28)), data_range=1.0 - 0.0)  
@@ -387,4 +444,4 @@ def measure_over_beta(LABEL):
 
 #Will not run when file is imported by other files
 if __name__ == '__main__':
-  acc = train(0.001, 0.1, 20000, 250)
+  acc = train(0.001, 0.1, 30, 200)
