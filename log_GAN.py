@@ -44,7 +44,7 @@ HIDDEN_UNIT = 1024
 CONV_OUT = 7 # convolution output image dimension, calculate based on previous parameters
 noise_dim = 10 # Noise data points
 gan_batch_size = 250
-L2_REGULAR = 0.1
+L2_REGULAR = 0.01
 # Initial training coefficient
 EPOCHS = 100
 learning_rate = 0.1
@@ -226,7 +226,7 @@ def train(loss_beta, learning_rate, Epoch, Batch):
     test_acc = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
     print("beta is %g, test accuracy is %g"%(loss_beta, test_acc))
     
-    train_GAN_MI(sess, 30000) 
+    train_GAN_MI(sess, 80000) 
 
     return test_acc
 
@@ -290,4 +290,4 @@ def train_GAN_MI(sess, num_steps):
 
 #Will not run when file is imported by other files
 if __name__ == '__main__':
-  acc = train(0.001, 0.1, 8000, 250)
+  acc = train(0.001, 0.1, 10000, 250)
