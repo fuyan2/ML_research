@@ -30,10 +30,10 @@ import math
 from gan_mi import Generator, Discriminator
 
 
-#Graph Structure
+#GAN Graph Structure
 IMG_ROWS = 28
 IMG_COLS = 28
-NUM_LABEL = 10 # using half as train, half as auxiliary
+NUM_LABEL = 10 
 INV_HIDDEN = 5000
 NUM_CHANNEL = 1 # Black white image
 FILTER_SIZE = 5 # Use 5x5 filter for all conv layer
@@ -42,8 +42,9 @@ DEPTH_2 = 64
 HIDDEN_UNIT = 1024
 CONV_OUT = 7 # convolution output image dimension, calculate based on previous parameters
 noise_dim = 10 # Noise data points
-gan_batch_size = 250
+gan_batch_size = 200
 L2_REGULAR = 0.01
+GAN_CLASS_COE = 1.1
 # Initial training coefficient
 EPOCHS = 100
 learning_rate = 0.1
@@ -248,13 +249,13 @@ def train_GAN_MI(sess, num_steps):
     gen_mi = np.reshape(gen_mi, [gan_batch_size, 28*28])
 
     # print('disc_input',disc_input.shape, 'batch_x',batch_x.shape, 'x',x.shape,  'gen_mi', gen_mi.shape)
-    _, _, gl, dl = sess.run([train_disc, train_GAN, gen_loss, disc_loss],
+    _, gl, dl = sess.run([train_GAN, gen_loss, disc_loss],
                             feed_dict={disc_input: batch_x,  gen_input: z, x: gen_mi, desired_label: d_label})
 
-    #train one generator for every 5 discriminator
-    # if i % 5 == 0:
-    #   _, gl, dl= sess.run([train_GAN, gen_loss, disc_loss],
-    #                         feed_dict={disc_input: batch_x,  gen_input: z, x: gen_mi, desired_label: d_label})
+    #train one discriminator for every 5 generator
+    if i % 5 == 0:
+      _, gl, dl= sess.run([train_disc, gen_loss, disc_loss],
+                            feed_dict={disc_input: batch_x,  gen_input: z, x: gen_mi, desired_label: d_label})
 
     if i % 100 == 0 or i == 1:
       print('Step %i: Generator Loss: %f, Discriminator Loss: %f' % (i, gl, dl))
@@ -282,7 +283,7 @@ def train_GAN_MI(sess, num_steps):
 
   # f.show()
   plt.draw()
-  plt.savefig('LOG_INV_GAN_MI')
+  plt.savefig('LOG_INV_GAN_MI_5GEN_1DIS')
 
 #Will not run when file is imported by other files
 if __name__ == '__main__':
