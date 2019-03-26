@@ -19,6 +19,10 @@ import matplotlib.image
 import pdb
 import copy
 import multiprocessing as mp
+import os
+import gzip
+import struct
+import array
 
 from datetime import datetime
 from skimage.measure import compare_ssim
@@ -39,8 +43,8 @@ DEPTH_2 = 64
 HIDDEN_UNIT = 1024
 CONV_OUT = 7 # convolution output image dimension, calculate based on previous parameters
 noise_dim = 10 # Noise data points
-gan_batch_size = 200
-
+gan_batch_size = 250
+L2_REGULAR = 0.1
 # Initial training coefficient
 EPOCHS = 100
 learning_rate = 0.1
@@ -66,10 +70,10 @@ def mnist(type):
             magic, num_data, rows, cols = struct.unpack(">IIII", fh.read(16))
             return np.array(array.array("B", fh.read()), dtype=np.uint8).reshape(num_data, rows, cols)
 
-    train_images = parse_images('data/emnist-',type,'-train-images-idx3-ubyte.gz')
-    train_labels = parse_labels('data/emnist-',type,'-train-labels-idx1-ubyte.gz')
-    test_images  = parse_images('data/emnist-',type,'-test-images-idx3-ubyte.gz')
-    test_labels  = parse_labels('data/emnist-',type,'-test-labels-idx1-ubyte.gz')
+    train_images = parse_images('data/emnist-'+type+'-train-images-idx3-ubyte.gz')
+    train_labels = parse_labels('data/emnist-'+type+'-train-labels-idx1-ubyte.gz')
+    test_images  = parse_images('data/emnist-'+type+'-test-images-idx3-ubyte.gz')
+    test_labels  = parse_labels('data/emnist-'+type+'-test-labels-idx1-ubyte.gz')
 
     return train_images, train_labels, test_images, test_labels
 
@@ -107,9 +111,13 @@ def inverter(y, model_weights):
   rect = lrelu(out_layer, 0.3)
   return rect
 
+#Loading data
+digits_x_train, digits_y_train, digits_x_test, digits_y_test = load_mnist('digits')
+letters_x_train, letters_y_train, letters_x_test, letters_y_test = load_mnist('digits')
+
 #build dataset structure
 features = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
-labels = tf.placeholder(tf.int32, shape=[None, 10])
+labels = tf.placeholder(tf.float32, shape=[None, 10])
 batch_size = tf.placeholder(tf.int64)
 sample_size = tf.placeholder(tf.int64)
 dataset = tf.data.Dataset.from_tensor_slices((features, labels))
@@ -117,7 +125,10 @@ dataset = dataset.shuffle(sample_size, reshuffle_each_iteration=True)
 dataset = dataset.batch(batch_size).repeat()
 
 iter = dataset.make_initializable_iterator()
-x, y = iter.get_next()
+next_batch = iter.get_next()
+
+x = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
+y = tf.placeholder(tf.float32, shape=[None, 10])
 
 #Build Logistic Layer
 with tf.name_scope("logistic_layer"):
@@ -138,8 +149,9 @@ inv_weights = {
 inv_x = inverter(y, model_weights)
 #Calculate loss
 inv_loss = tf.losses.mean_squared_error(labels=x, predictions=inv_x)
-class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_ml))
+class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y, logits=y_ml))
 mi_loss = tf.losses.mean_squared_error(labels=x, predictions=tf.tanh(inv_x))
+l2_loss = tf.nn.l2_loss(w)
 # calculate prediction accuracy
 correct = tf.equal(tf.argmax(y_ml, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
@@ -187,32 +199,34 @@ train_disc = optimizer_disc.minimize(disc_loss, var_list=disc_vars)
 
 def train(loss_beta, learning_rate, Epoch, Batch):
 #   total_loss = class_loss - loss_beta * mi_loss
-  total_loss = class_loss
+  total_loss = class_loss + L2_REGULAR*l2_loss
   model_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(total_loss, var_list=[w,b])
 #   inverter_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(inv_loss)
   init_vars = tf.global_variables_initializer()
-  x_train, y_train, x_test, y_test = load_mnist('digits')
 
   with tf.Session() as sess:
     sess.run(init_vars)
     
     # initialise iterator with train data
-    sess.run(iter.initializer, feed_dict = {features: x_train, labels: y_train, batch_size: Batch, sample_size: 10000})
+    sess.run(iter.initializer, feed_dict = {features: digits_x_train, labels: digits_y_train, batch_size: Batch, sample_size: 10000})
     
     print('Beta %g rate %g batch %g Training...'%(loss_beta, learning_rate, Batch))
     for i in range(Epoch):
-      # _, _ = sess.run(model_optimizer, inverter_optimizer)
-      _ = sess.run(model_optimizer)
+      batch = sess.run(next_batch)
+      model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
+      # inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
+
       if i % 1000 == 0:  
-        train_accuracy = sess.run(accuracy)     
+        train_accuracy = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })    
         print('step %d, training accuracy %g' % (i, train_accuracy))    
     
       # initialise iterator with test data
-    sess.run(iter.initializer, feed_dict = {features: x_test, labels: y_test, batch_size: y_test.shape[0], sample_size: 1})
-    test_acc = sess.run(accuracy)
+    sess.run(iter.initializer, feed_dict = {features: digits_x_test, labels: digits_y_test, batch_size: digits_y_test.shape[0], sample_size: 1})
+    batch = sess.run(next_batch)
+    test_acc = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
     print("beta is %g, test accuracy is %g"%(loss_beta, test_acc))
     
-    train_GAN_MI(sess, 20000) 
+    train_GAN_MI(sess, 30000) 
 
     return test_acc
 
@@ -221,15 +235,16 @@ def show_image(array):
   plt.show(adv_img)
 
 def train_GAN_MI(sess, num_steps):
-  #load data
-  letters_db = load_mnist('letters')
   d_label = np.zeros([gan_batch_size, 10])
   d_label[:,3] = 1
 
   for i in range(1, num_steps+1):
     # Prepare Data
+     # initialise iterator with letters train data
+    sess.run(iter.initializer, feed_dict = {features: letters_x_train, labels: letters_y_train, batch_size: gan_batch_size, sample_size: 10000})
+
     # Get the next batch of MNIST data (only images are needed, not labels)
-    batch_x, batch_y = mnist.train.next_batch(gan_batch_size)
+    batch_x, batch_y = sess.run(next_batch)
 
     z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
     # Train
