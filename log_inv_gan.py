@@ -282,7 +282,7 @@ def train_GAN_MI(sess, num_steps):
 
   # f.show()
   plt.draw()
-  plt.savefig('GAN_MI')
+  plt.savefig('LOG_INV_GAN_MI')
 
 #Will not run when file is imported by other files
 if __name__ == '__main__':
