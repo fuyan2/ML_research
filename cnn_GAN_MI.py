@@ -88,44 +88,9 @@ def load_mnist(type):
     test_images  = partial_flatten(test_images)  / 255.0
     train_labels = one_hot(train_labels, 10)
     test_labels = one_hot(test_labels, 10)
+    N_data = train_images.shape[0]
 
-    return train_images, train_labels, test_images, test_labels
-
-def mnist(type):
-    def parse_labels(filename):
-        with gzip.open(filename, 'rb') as fh:
-            magic, num_data = struct.unpack(">II", fh.read(8))
-            return np.array(array.array("B", fh.read()), dtype=np.uint8)
-
-    def parse_images(filename):
-        with gzip.open(filename, 'rb') as fh:
-            magic, num_data, rows, cols = struct.unpack(">IIII", fh.read(16))
-            return np.array(array.array("B", fh.read()), dtype=np.uint8).reshape(num_data, rows, cols)
-
-    train_images = parse_images('data/emnist-'+type+'-train-images-idx3-ubyte.gz')
-    train_labels = parse_labels('data/emnist-'+type+'-train-labels-idx1-ubyte.gz')
-    test_images  = parse_images('data/emnist-'+type+'-test-images-idx3-ubyte.gz')
-    test_labels  = parse_labels('data/emnist-'+type+'-test-labels-idx1-ubyte.gz')
-
-    return train_images, train_labels, test_images, test_labels
-
-
-def load_mnist(type):
-    partial_flatten = lambda x : np.reshape(x, (x.shape[0], np.prod(x.shape[1:])))
-    one_hot = lambda x, k: np.array(x[:,None] == np.arange(k)[None, :], dtype=int)
-    train_images, train_labels, test_images, test_labels = mnist(type)
-    train_images = partial_flatten(train_images) / 255.0
-    test_images  = partial_flatten(test_images)  / 255.0
-    train_labels = one_hot(train_labels, 10)
-    test_labels = one_hot(test_labels, 10)
-
-    return train_images, train_labels, test_images, test_labels
-
-def layer(input, num_units):
-  W = tf.Variable(tf.zeros([input.shape[1], num_units], tf.float32), name="w")
-  B = tf.Variable(tf.zeros([num_units], tf.float32), name="b")
-  output = tf.nn.bias_add(tf.matmul(input,W), B)
-  return W, B, output
+    return N_data, train_images, train_labels, test_images, test_labels
 
 def lrelu(x, alpha):
   return tf.nn.relu(x) - alpha * tf.nn.relu(-x)
@@ -143,9 +108,10 @@ def inverter(y, model_weights):
   return rect
 
 #Loading data
-digits_x_train, digits_y_train, digits_x_test, digits_y_test = load_mnist('digits')
-letters_x_train, letters_y_train, letters_x_test, letters_y_test = load_mnist('digits')
+digits_size, digits_x_train, digits_y_train, digits_x_test, digits_y_test = load_mnist('digits')
+letters_size, letters_x_train, letters_y_train, letters_x_test, letters_y_test = load_mnist('digits')
 
+print("total train digits: %d, total train letters: %d"%(digits_size,letters_size))
 #build dataset structure
 features = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
 labels = tf.placeholder(tf.float32, shape=[None, 10])
@@ -256,9 +222,9 @@ train_disc = optimizer_disc.minimize(disc_loss, var_list=disc_vars)
 def train(loss_beta, learning_rate, Epoch, Batch):
   # total_loss = class_loss - loss_beta * mi_loss
   total_loss = class_loss + loss_beta * tf.norm(model_weights)
-  steps_per_batch = int(digits_y_train.shape[0]/ BATCH_SIZE)
+  steps_per_epoch = int(digits_size/ BATCH_SIZE)
   global_step = tf.train.get_or_create_global_step()
-  learn_rate = tf.train.exponential_decay(1e-3, global_step, decay_steps=2*steps_per_batch, decay_rate=0.97, staircase=True)
+  learn_rate = tf.train.exponential_decay(1e-3, global_step, decay_steps=2*steps_per_epoch, decay_rate=0.97, staircase=True)
   model_optimizer = tf.train.AdamOptimizer(learn_rate).minimize(total_loss, var_list=[conv_w1, conv_w2, conv_b1, conv_b2, full_w, full_b, out_w, out_b])
   inverter_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(inv_loss)
   init_vars = tf.global_variables_initializer()
@@ -270,14 +236,13 @@ def train(loss_beta, learning_rate, Epoch, Batch):
     sess.run(iter.initializer, feed_dict = {features: digits_x_train, labels: digits_y_train, batch_size: Batch, sample_size: 10000})
     
     print('Beta %g Training...'%(loss_beta))
-    for i in range(Epoch*steps_per_batch):
-      batch = sess.run(next_batch)
-      model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
-      inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
-  #       _,_,train_acc,train_total_loss, train_inv_loss, train_class_loss = sess.run([model_optimizer,inverter_optimizer, accuracy, total_loss, inv_loss, class_loss])
-      if i % 10 == 0:  
-        train_accuracy = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
-        print('step %d, training accuracy %g' % (i, train_accuracy))    
+    for i in range(Epoch):
+      for step in range(steps_per_epoch):
+        batch = sess.run(next_batch)
+        model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
+        inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
+      train_accuracy = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
+      print('Epoch %d, training accuracy %g' % (i, train_accuracy))    
 
     # initialise iterator with test data
     sess.run(iter.initializer, feed_dict = {features: digits_x_test, labels: digits_y_test, batch_size: digits_y_test.shape[0], sample_size: 1})
@@ -285,37 +250,36 @@ def train(loss_beta, learning_rate, Epoch, Batch):
     test_acc = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
     print("beta is %g, test accuracy is %g"%(loss_beta, test_acc))
     
-    train_GAN_MI(sess, 80000) 
+    train_GAN_MI(sess, 80) 
     return test_acc
 
-def train_GAN_MI(sess, num_steps):
+def train_GAN_MI(sess, Epoch):
   d_label = np.zeros([gan_batch_size, 10])
   d_label[:,3] = 1
+  steps_per_epoch = int(digits_size/ gan_batch_size)
 
-  for i in range(0, num_steps):
-    # Prepare Data
-     # initialise iterator with letters train data
-    sess.run(iter.initializer, feed_dict = {features: letters_x_train, labels: letters_y_train, batch_size: gan_batch_size, sample_size: 10000})
+  # initialise iterator with letters train data
+  sess.run(iter.initializer, feed_dict = {features: letters_x_train, labels: letters_y_train, batch_size: gan_batch_size, sample_size: 10000})
 
-    # Get the next batch of MNIST data (only images are needed, not labels)
-    batch_x, batch_y = sess.run(next_batch)
+  for i in range(0, Epoch):
+    for step in range(steps_per_epoch):
+      # Get the next batch of MNIST data (only images are needed, not labels)
+      batch_x, batch_y = sess.run(next_batch)
 
-    z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
-    # Train
-    gen_mi = sess.run(gen_sample, feed_dict={gen_input:z, desired_label: d_label}) 
-    gen_mi = np.reshape(gen_mi, [gan_batch_size, 28*28])
+      z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
+      # Train
+      gen_mi = sess.run(gen_sample, feed_dict={gen_input:z, desired_label: d_label}) 
+      gen_mi = np.reshape(gen_mi, [gan_batch_size, 28*28])
 
-    # print('disc_input',disc_input.shape, 'batch_x',batch_x.shape, 'x',x.shape,  'gen_mi', gen_mi.shape)
-    _, gl, dl = sess.run([train_GAN, gen_loss, disc_loss],
-                            feed_dict={disc_input: batch_x,  gen_input: z, x: gen_mi, desired_label: d_label})
+      # print('disc_input',disc_input.shape, 'batch_x',batch_x.shape, 'x',x.shape,  'gen_mi', gen_mi.shape)
+      train_GAN.run(feed_dict={disc_input: batch_x,  gen_input: z, x: gen_mi, desired_label: d_label})
 
-    #train one discriminator for every 5 generator
-    if i % 5 == 0:
-      _, gl, dl= sess.run([train_disc, gen_loss, disc_loss],
-                            feed_dict={disc_input: batch_x,  gen_input: z, x: gen_mi, desired_label: d_label})
+      #train one discriminator for every 5 generator
+      if step % 5 == 0:
+        train_disc.run(feed_dict={disc_input: batch_x,  gen_input: z, x: gen_mi, desired_label: d_label})
 
-    if i % 100 == 0:
-      print('Step %i: Generator Loss: %f, Discriminator Loss: %f' % (i, gl, dl))
+    gl,dl = sess.run([gen_loss, disc_loss], feed_dict={disc_input: batch_x,  gen_input: z, x: gen_mi, desired_label: d_label})
+    print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f' % (i, gl, dl))
             
   # Generate images from noise, using the generator network.
   f, a = plt.subplots(4, 10, figsize=(10, 4))
