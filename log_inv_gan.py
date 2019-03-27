@@ -235,11 +235,12 @@ def train_GAN_MI(sess, num_steps):
   d_label = np.zeros([gan_batch_size, 10])
   d_label[:,3] = 1
 
+  # initialise iterator with letters train data
+  sess.run(iter.initializer, feed_dict = {features: letters_x_train, labels: letters_y_train, batch_size: gan_batch_size, sample_size: 10000})
+
   for i in range(1, num_steps+1):
     # Prepare Data
-     # initialise iterator with letters train data
-    sess.run(iter.initializer, feed_dict = {features: letters_x_train, labels: letters_y_train, batch_size: gan_batch_size, sample_size: 10000})
-
+     
     # Get the next batch of MNIST data (only images are needed, not labels)
     batch_x, batch_y = sess.run(next_batch)
 
