@@ -322,8 +322,6 @@ def train_GAN_MI(sess, num_steps):
   for i in range(10):
       # Noise input.
       z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
-      d_label = np.zeros([gan_batch_size, 10])
-      d_label[:,3] = 1
       g = sess.run([gen_sample], feed_dict={gen_input: z, desired_label: d_label})
       g = np.array(g)
       g = np.reshape(g, newshape=(gan_batch_size, 28, 28, 1))
