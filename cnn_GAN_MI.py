@@ -43,15 +43,15 @@ DEPTH_1 = 32 # num output feature maps for first layer
 DEPTH_2 = 64
 HIDDEN_UNIT = 1024
 CONV_OUT = 7 # convolution output image dimension, calculate based on previous parameters
-noise_dim = 10 # Noise data points
-gan_batch_size = 200
+noise_dim = 128 # Noise data points
+gan_batch_size = 64
 L2_REGULAR = 0.01
 GAN_CLASS_COE = 1.1
+gan_learning_rate = 0.0002
 
 # Initial training coefficient
 EPOCHS = 100
 learning_rate = 0.1
-gan_learning_rate = 0.0002
 loss_beta = 0.003
 BATCH_SIZE = 250
 ALPHA = 20000
@@ -174,7 +174,7 @@ inv_weights = {
 inv_x = inverter(y, model_weights)
 #Calculate loss
 inv_loss = tf.losses.mean_squared_error(labels=x, predictions=inv_x)
-class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_ml))
+class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y, logits=y_ml))
 mi_loss = tf.losses.mean_squared_error(labels=x, predictions=tf.tanh(inv_x))
 # calculate prediction accuracy
 correct = tf.equal(tf.argmax(y_ml, 1), tf.argmax(y, 1))
@@ -184,27 +184,41 @@ accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 # Build GAN                                    #
 ################################################
 # Network Inputs
-gen_input = tf.placeholder(tf.float32, shape=[None, noise_dim], name='input_noise')
-disc_input = tf.placeholder(tf.float32, shape=[None, 28*28])
-disc_input_reshape = tf.reshape(disc_input , [-1,28, 28,1])
-desired_label = tf.placeholder(tf.float32, shape=[None,10], name='desired_label') #generate image for label 2
+gen_input = tf.placeholder(tf.float32, shape=[gan_batch_size, noise_dim], name='input_noise')
+real_input = tf.placeholder(tf.float32, shape=[gan_batch_size, 28*28])
+real_input_reshape = tf.reshape(real_input , [-1,28, 28,1])
+desired_label = tf.placeholder(tf.float32, shape=[gan_batch_size,10], name='desired_label') #generate image for label 2
+
 # Build Generator Network
 gen = Generator(noise_dim, NUM_LABEL, gan_batch_size)
-gen_sample = gen.build(gen_input,desired_label)
-
+gen_sample = gen(gen_input,desired_label)
+gen_sample_reshape = tf.reshape(gen_sample, [gan_batch_size, 28*28])
 # Build 2 Discriminator Networks (one from noise input, one from generated samples)
 discrim = Discriminator()
-disc_real = discrim.build(disc_input_reshape)
-disc_fake = discrim.build(gen_sample)
+disc_real = discrim(real_input_reshape)
+disc_fake = discrim(gen_sample)
 
 # Build Loss
-gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=desired_label, logits=y_ml))
-gen_loss = -tf.reduce_mean(tf.log(tf.maximum(0.001, disc_fake))) + gan_class_loss
-disc_loss = -tf.reduce_mean(tf.log(tf.maximum(0.001, disc_real)) + tf.log(tf.maximum(0.001, 1. - disc_fake)))
+def wgan_grad_pen(batch_size,x,G_sample):    
+    lam = 10   
+
+    eps = tf.random_uniform([batch_size,1], minval=0.0,maxval=1.0)
+    x_h = eps*x+(1-eps)*G_sample
+    x_h = tf.reshape(x_h, [batch_size, 28, 28, 1])
+    with tf.variable_scope("", reuse=True) as scope:
+        grad_d_x_h = tf.gradients(discrim(x_h), x_h)    
+    grad_norm = tf.norm(grad_d_x_h[0], axis=1, ord='euclidean')
+    grad_pen = tf.reduce_mean(tf.square(grad_norm-1))
+  
+    return lam*grad_pen
+
+cos_similarity = 1. - tf.losses.cosine_distance(desired_label,y_ml,axis = 1)
+gen_loss = -tf.reduce_mean(disc_fake) - cos_similarity
+disc_loss = -tf.reduce_mean(disc_real) + tf.reduce_mean(disc_fake) + wgan_grad_pen(gan_batch_size,real_input, gen_sample_reshape)
 
 # Build Optimizers
-optimizer_gen = tf.train.AdamOptimizer(learning_rate=gan_learning_rate)
-optimizer_disc = tf.train.AdamOptimizer(learning_rate=gan_learning_rate)
+optimizer_gen = tf.train.AdamOptimizer(learning_rate=gan_learning_rate, beta1=0.5, beta2=0.999)
+optimizer_disc = tf.train.AdamOptimizer(learning_rate=gan_learning_rate, beta1=0.5, beta2=0.999)
 
 # Training Variables for each optimizer
 # gen Network Variables
@@ -250,40 +264,44 @@ def train(loss_beta, learning_rate, Epoch, Batch):
     test_acc = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
     print("beta is %g, test accuracy is %g"%(loss_beta, test_acc))
     
-    train_GAN_MI(sess, 80) 
+    train_GAN_MI(sess, 100) 
     return test_acc
 
 def train_GAN_MI(sess, Epoch):
-  d_label = np.zeros([gan_batch_size, 10])
-  d_label[:,3] = 1
-  steps_per_epoch = int(digits_size/ gan_batch_size)
+  steps_per_epoch = int(letters_size/ gan_batch_size)
 
   # initialise iterator with letters train data
   sess.run(iter.initializer, feed_dict = {features: letters_x_train, labels: letters_y_train, batch_size: gan_batch_size, sample_size: 10000})
 
   for i in range(0, Epoch):
-    for step in range(steps_per_epoch):
+    for step in range(0, steps_per_epoch):
       # Get the next batch of MNIST data (only images are needed, not labels)
       batch_x, batch_y = sess.run(next_batch)
-
+      # Aux label used to compute similarity
+      aux_label = sess.run(y_ml, feed_dict={x: batch_x})
+      # Sample random noise 
       z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
-      # Train
-      gen_mi = sess.run(gen_sample, feed_dict={gen_input:z, desired_label: d_label}) 
+      # Pass random noise into the generator and get generated image
+      gen_mi = sess.run(gen_sample, feed_dict={gen_input:z, desired_label: aux_label}) 
       gen_mi = np.reshape(gen_mi, [gan_batch_size, 28*28])
 
-      # print('disc_input',disc_input.shape, 'batch_x',batch_x.shape, 'x',x.shape,  'gen_mi', gen_mi.shape)
-      train_GAN.run(feed_dict={disc_input: batch_x,  gen_input: z, x: gen_mi, desired_label: d_label})
+      # Train Generator
+      train_disc.run(feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
 
       #train one discriminator for every 5 generator
       if step % 5 == 0:
-        train_disc.run(feed_dict={disc_input: batch_x,  gen_input: z, x: gen_mi, desired_label: d_label})
+        train_GAN.run(feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
 
-    gl,dl = sess.run([gen_loss, disc_loss], feed_dict={disc_input: batch_x,  gen_input: z, x: gen_mi, desired_label: d_label})
+    gl,dl = sess.run([gen_loss, disc_loss], feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
     print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f' % (i, gl, dl))
             
   # Generate images from noise, using the generator network.
+  
   f, a = plt.subplots(4, 10, figsize=(10, 4))
   for i in range(10):
+      # Desired label
+      d_label = np.zeros([gan_batch_size, 10])
+      d_label[:,i] = 1
       # Noise input.
       z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
       g = sess.run([gen_sample], feed_dict={gen_input: z, desired_label: d_label})
@@ -302,107 +320,7 @@ def train_GAN_MI(sess, Epoch):
 
   # f.show()
   plt.draw()
-  plt.savefig('CNN_INV_GAN_MI_5GEN_1DIS')
-
-
-def model_inversion(i, y_conv, sess, iterate):
-  label_chosen = np.zeros(10)
-  label_chosen[i] = 1
-  
-  cost_x = 1 - tf.squeeze(tf.gather(y_conv, i, axis=1), 0)
-  gradient_of_cost = tf.gradients(cost_x, x)
-  x_inv = x - tf.scalar_mul(LAMBDA, tf.squeeze(gradient_of_cost, 0))
-  x_mi = np.zeros((1, 784))
-  previous_costs = [inf,inf,inf,inf,inf]
-
-  for i in range(ALPHA):
-    x_mi = sess.run(x_inv, feed_dict={x: x_mi, y: [label_chosen] })
-    cost_x_mi = sess.run(cost_x, feed_dict={x: x_mi, y: [label_chosen] })
-    max_cost = max(previous_costs)
-    
-    if(cost_x_mi > max_cost or (iterate and cost_x_mi == 0)):
-      print("Early break, no ALPHA HIT")
-      break;
-    else:
-      previous_costs.append(cost_x_mi)
-      previous_costs.pop(0)
-
-    if(i % 1000 == 0):
-      print('step %d, current cost is %g' % (i, cost_x_mi))
-
-  print('iteration hit:', i+1)
-
-  # Make background black instead of grey
-  for i in range(x_mi.shape[1]):
-    if(x_mi[0][i] < 0):
-      x_mi[0][i] = 0
-    if(x_mi[0][i] > 1):
-      x_mi[0][i] = 1
-
-  check_pred = sess.run(correct, feed_dict={x: x_mi, y: [label_chosen] })
-  print("Prediction:", check_pred)
-  return x_mi
-
-def show_image(array):
-  adv_img = plt.imshow(np.reshape(array, (28, 28)), cmap="gray", vmin=array.min(), vmax=array.max())
-  plt.show(adv_img)
-  
-def average_images(images, labels):
-  avg_imgs = np.zeros((10, IMG_COLS * IMG_ROWS))
-
-  for i in range(10):
-    indices = np.where(labels == i)
-    imgs_for_label = images[indices]
-    avg_imgs[i] = 1/imgs_for_label.shape[0] * np.sum(imgs_for_label, axis=0)
-
-  return avg_imgs 
-
-def square_mean(img1, img2):
-  img1 = np.reshape(img1, -1)
-  img2 = np.reshape(img2, -1)
-  diff = img1 - img2
-  diff_sq = np.square(diff)
-  multiplier = 1 / (IMG_ROWS*IMG_COLS)
-  return multiplier * np.sum(diff_sq)
-
-def show_all_images_one_row(array):
-    images = []
-    for i in range(array.shape[0]):
-      images.append(np.reshape(array[i], (IMG_ROWS, IMG_COLS)))
-
-    all_concat = np.concatenate(images, 1)
-    plt.imshow(all_concat, cmap="gray")
-    plt.show()
-
-def plot_vs_beta(values, betas, title, axis):
-  plt.plot(betas, values, 'ko-')
-  plt.ylabel(axis)
-  plt.title(title)
-  plt.xlabel('Beta')
-  plt.xscale('log')
-  plt.show()
-
-def measure_over_beta(LABEL):
-  betas = [0.0, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0]
-  # betas = [0.0, 10, 50.0, 80.0, 100.0, 200.0]
-  mnist_noh = input_data.read_data_sets('MNIST_data', one_hot=False)
-  average_image = average_images(mnist_noh.train.images, mnist_noh.train.labels)[LABEL]
-  test_accs = np.zeros(len(betas))
-  ssim = np.zeros(len(betas))
-  sq_mean = np.zeros(len(betas))
-  image_over_beta = np.zeros((len(betas), IMG_ROWS*IMG_COLS))
-  # Iterate through beta
-  for i,beta in enumerate(betas):
-    test_accs[i], inverted_image = train(beta, 0.1, 30, 200)
-    norm_mi = (inverted_image + inverted_image.min()) * 1 /inverted_image.max()
-    image_over_beta[i] = norm_mi
-    ssim[i] = compare_ssim(np.reshape(average_image, (28, 28)), np.reshape(norm_mi, (28, 28)), data_range=1.0 - 0.0)  
-    sq_mean[i] = square_mean(average_image, norm_mi)
-  
-  show_all_images_one_row(image_over_beta)
-  plot_vs_beta(test_accs, betas, "Test Accuracy vs. Beta", "Accuracy (%)")
-  plot_vs_beta(ssim, betas, "SSIM vs. Beta", "SSIM")
-  plot_vs_beta(sq_mean, betas, "Square Mean over Pixels vs. Beta", "Square Mean")
+  plt.savefig('CNN_INV_GAN_MI_1GEN_5DIS')
 
 #Will not run when file is imported by other files
 if __name__ == '__main__':
