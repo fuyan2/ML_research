@@ -238,7 +238,7 @@ def train(loss_beta, learning_rate, Epoch, Batch):
     test_acc = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
     print("beta is %g, test accuracy is %g"%(loss_beta, test_acc))
     
-    train_GAN_MI(sess, 100) 
+    train_GAN_MI(sess, 150) 
 
     return test_acc
 
@@ -276,7 +276,7 @@ def train_GAN_MI(sess, Epoch):
             
   # Generate images from noise, using the generator network.
   
-  f, a = plt.subplots(4, 10, figsize=(10, 4))
+  f, a = plt.subplots(12, 10, figsize=(10, 4))
   for i in range(10):
       # Desired label
       d_label = np.zeros([gan_batch_size, 10])
@@ -286,12 +286,12 @@ def train_GAN_MI(sess, Epoch):
       g = sess.run([gen_sample], feed_dict={gen_input: z, desired_label: d_label})
       g = np.array(g)
       g = np.reshape(g, newshape=(gan_batch_size, 28, 28, 1))
-      #print the top 4 images
-      g = g[:4,:]
+      #print the top 12 images
+      g = g[:12,:]
 
       # Reverse colours for better display
       g = -1 * (g - 1)
-      for j in range(4):
+      for j in range(12):
           # Generate image from noise. Extend to 3 channels for matplot figure.
           img = np.reshape(np.repeat(g[j][:, :, np.newaxis], 3, axis=2),
                            newshape=(28, 28, 3))
@@ -299,7 +299,7 @@ def train_GAN_MI(sess, Epoch):
 
   # f.show()
   plt.draw()
-  plt.savefig('LOG_INV_GAN_MI_1GEN_5DIS')
+  plt.savefig('LOG_GAN_MI_1GEN_5DIS')
 
 #Will not run when file is imported by other files
 if __name__ == '__main__':
