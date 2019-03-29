@@ -25,7 +25,7 @@ import struct
 import array
 
 from datetime import datetime
-from skimage.measure import compare_ssim
+# from skimage.measure import compare_ssim
 import math
 from gan_mi import Generator, Discriminator
 
@@ -238,7 +238,7 @@ def train(loss_beta, learning_rate, Epoch, Batch):
     test_acc = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
     print("beta is %g, test accuracy is %g"%(loss_beta, test_acc))
     
-    train_GAN_MI(sess, 200) 
+    train_GAN_MI(sess, 100) 
 
     return test_acc
 
@@ -299,7 +299,7 @@ def train_GAN_MI(sess, Epoch):
 
   # f.show()
   plt.draw()
-  plt.savefig('LOG_GAN_MI_1GEN_5DIS')
+  plt.savefig('LOG_INV_GAN_MI_1GEN_5DIS')
 
 #Will not run when file is imported by other files
 if __name__ == '__main__':

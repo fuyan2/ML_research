@@ -27,7 +27,7 @@ import copy
 import multiprocessing as mp
 
 from datetime import datetime
-from skimage.measure import compare_ssim
+# from skimage.measure import compare_ssim
 import math
 from gan_mi import Generator, Discriminator
 
