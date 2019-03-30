@@ -25,7 +25,7 @@ import struct
 import array
 
 from datetime import datetime
-from skimage.measure import compare_ssim
+# from skimage.measure import compare_ssim
 import math
 from gan_mi import Generator, Discriminator
 
