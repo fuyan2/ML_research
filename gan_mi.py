@@ -74,8 +74,8 @@ class Discriminator:
     conv_xw5 = tf.nn.conv2d(conv_h4,self.conv_w5,strides=[1, 1, 1, 1], padding='SAME')
     conv_h5 = tf.nn.leaky_relu(conv_xw5 + self.conv_b5)
     conv_h5_flat = tf.reshape(conv_h5, [-1, 7*7*256])
-    # out = tf.nn.sigmoid(tf.matmul(conv_h5_flat, self.linear_w) + self.linear_b)
-    out = tf.matmul(conv_h5_flat, self.linear_w) + self.linear_b
+    out = tf.tanh(tf.matmul(conv_h5_flat, self.linear_w) + self.linear_b)
+    # out = tf.matmul(conv_h5_flat, self.linear_w) + self.linear_b
     return out
 
 

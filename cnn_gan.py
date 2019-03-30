@@ -112,6 +112,8 @@ digits_size, digits_x_train, digits_y_train, digits_x_test, digits_y_test = load
 letters_size, letters_x_train, letters_y_train, letters_x_test, letters_y_test = load_mnist('digits')
 
 print("total train digits: %d, total train letters: %d"%(digits_size,letters_size))
+print("total test digits: %d, total test letters: %d"%(digits_y_test.shape[0],letters_y_test.shape[0]))
+
 #build dataset structure
 features = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
 labels = tf.placeholder(tf.float32, shape=[None, 10])
@@ -213,8 +215,8 @@ def wgan_grad_pen(batch_size,x,G_sample):
     return lam*grad_pen
 
 cos_similarity = 1. - tf.losses.cosine_distance(desired_label,y_ml,axis = 1)
-gen_loss = -tf.reduce_mean(disc_fake) - cos_similarity
-disc_loss = -tf.reduce_mean(disc_real) + tf.reduce_mean(disc_fake) + wgan_grad_pen(gan_batch_size,real_input, gen_sample_reshape)
+gen_loss = tf.reduce_mean(tf.square(disc_fake - 1.)) - cos_similarity
+disc_loss = tf.reduce_mean(tf.square(disc_real - 1.)) + tf.reduce_mean(tf.square(disc_fake)) + wgan_grad_pen(gan_batch_size,real_input, gen_sample_reshape)
 
 # Build Optimizers
 optimizer_gen = tf.train.AdamOptimizer(learning_rate=gan_learning_rate, beta1=0.5, beta2=0.999)

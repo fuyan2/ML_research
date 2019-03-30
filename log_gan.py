@@ -189,8 +189,8 @@ def wgan_grad_pen(batch_size,x,G_sample):
     return lam*grad_pen
 
 cos_similarity = 1. - tf.losses.cosine_distance(desired_label,y_ml,axis = 1)
-gen_loss = -tf.reduce_mean(disc_fake) - cos_similarity
-disc_loss = -tf.reduce_mean(disc_real) + tf.reduce_mean(disc_fake) + wgan_grad_pen(gan_batch_size,real_input, gen_sample_reshape)
+gen_loss = tf.reduce_mean(tf.square(disc_fake - 1.)) - cos_similarity
+disc_loss = tf.reduce_mean(tf.square(disc_real - 1.)) + tf.reduce_mean(tf.square(disc_fake)) + wgan_grad_pen(gan_batch_size,real_input, gen_sample_reshape)
 
 # Build Optimizers
 optimizer_gen = tf.train.AdamOptimizer(learning_rate=gan_learning_rate, beta1=0.5, beta2=0.999)
