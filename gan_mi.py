@@ -32,7 +32,7 @@ class Generator:
     self.deconv_b3 = tf.Variable(tf.constant(0.1, shape=[1]), name='gb3')
 
  # Build Generator Graph
-  def build(self, z,y):
+  def __call__(self, z,y):
     z_y = tf.concat([z,y],1)
     linear_h = tf.matmul(z_y,self.linear_w)+self.linear_b
     linear_h_reshape = tf.reshape(linear_h , [-1,7, 7,256])  
@@ -62,7 +62,7 @@ class Discriminator:
     self.linear_b = tf.Variable(glorot_init([1]))
   
   # Build Discriminator Graph
-  def build(self, x):
+  def __call__(self, x):
     conv_xw1 = tf.nn.conv2d(x,self.conv_w1,strides=[1, 1, 1, 1], padding='SAME')
     conv_h1 = tf.nn.leaky_relu(conv_xw1 + self.conv_b1)
     conv_xw2 = tf.nn.conv2d(conv_h1,self.conv_w2,strides=[1, 2, 2, 1], padding='SAME')
@@ -74,7 +74,8 @@ class Discriminator:
     conv_xw5 = tf.nn.conv2d(conv_h4,self.conv_w5,strides=[1, 1, 1, 1], padding='SAME')
     conv_h5 = tf.nn.leaky_relu(conv_xw5 + self.conv_b5)
     conv_h5_flat = tf.reshape(conv_h5, [-1, 7*7*256])
-    out = tf.nn.sigmoid(tf.matmul(conv_h5_flat, self.linear_w) + self.linear_b)
+    out = tf.tanh(tf.matmul(conv_h5_flat, self.linear_w) + self.linear_b)
+    # out = tf.matmul(conv_h5_flat, self.linear_w) + self.linear_b
     return out
 
 
