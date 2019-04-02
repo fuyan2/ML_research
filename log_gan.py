@@ -44,6 +44,7 @@ CONV_OUT = 7 # convolution output image dimension, calculate based on previous p
 noise_dim = 10 # Noise data points
 gan_batch_size = 250
 L2_REGULAR = 0.01
+lam_gp = 2 #gradient penalty lambda for discriminator, default 10
 # Initial training coefficient
 EPOCHS = 100
 learning_rate = 0.1
@@ -177,8 +178,6 @@ disc_fake = discrim(gen_sample)
 
 # Build Loss
 def wgan_grad_pen(batch_size,x,G_sample):    
-    lam = 10   
-
     eps = tf.random_uniform([batch_size,1], minval=0.0,maxval=1.0)
     x_h = eps*x+(1-eps)*G_sample
     x_h = tf.reshape(x_h, [batch_size, 28, 28, 1])
@@ -187,11 +186,12 @@ def wgan_grad_pen(batch_size,x,G_sample):
     grad_norm = tf.norm(grad_d_x_h[0], axis=1, ord='euclidean')
     grad_pen = tf.reduce_mean(tf.square(grad_norm-1))
   
-    return lam*grad_pen
+    return grad_pen
 
+#This op expects unscaled logits, since it performs a softmax on logits internally for efficiency. Do not call this op with the output of softmax, as it will produce incorrect results.
 gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=desired_label, logits=z))
 gen_loss = -tf.reduce_mean(tf.log(tf.maximum(0.001, disc_fake))) + gan_class_loss
-disc_loss = -tf.reduce_mean(tf.log(tf.maximum(0.001, disc_real)) + tf.log(tf.maximum(0.001, 1. - disc_fake))) + wgan_grad_pen(gan_batch_size,real_input, gen_sample_reshape)
+disc_loss = -tf.reduce_mean(tf.log(tf.maximum(0.001, disc_real)) + tf.log(tf.maximum(0.001, 1. - disc_fake))) + lam_gp*wgan_grad_pen(gan_batch_size,real_input, gen_sample_reshape)
 
 # Build Optimizers
 optimizer_gen = tf.train.AdamOptimizer(learning_rate=gan_learning_rate, beta1=0.5, beta2=0.999)
@@ -239,7 +239,7 @@ def train(loss_beta, learning_rate, Epoch, Batch):
     test_acc = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
     print("beta is %g, test accuracy is %g"%(loss_beta, test_acc))
     
-    train_GAN_MI(sess, 10) 
+    train_GAN_MI(sess, 50) 
 
     return test_acc
 
@@ -271,7 +271,7 @@ def train_GAN_MI(sess, Epoch):
         train_disc.run(feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
 
         #train one discriminator for every 5 generator
-        if step % 2 == 0:
+        if step % 5 == 0:
           train_GAN.run(feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
 
       gl,dl = sess.run([gen_loss, disc_loss], feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
