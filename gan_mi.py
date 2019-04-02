@@ -30,6 +30,7 @@ class Generator:
     self.deconv_b1 = tf.Variable(tf.constant(0.1, shape=[128]), name='gb1')
     self.deconv_b2 = tf.Variable(tf.constant(0.1, shape=[64]), name='gb2')
     self.deconv_b3 = tf.Variable(tf.constant(0.1, shape=[1]), name='gb3')
+    self.training = True
 
  # Build Generator Graph
   def __call__(self, z,y):
@@ -37,12 +38,13 @@ class Generator:
     linear_h = tf.matmul(z_y,self.linear_w)+self.linear_b
     linear_h_reshape = tf.reshape(linear_h , [-1,7, 7,256])  
     deconv_xw1 = tf.nn.conv2d_transpose(linear_h_reshape, self.deconv_w1,output_shape=[self.batch_size,14,14,128], strides=[1, 2, 2, 1])
-    deconv_h1 = tf.nn.leaky_relu(deconv_xw1 + self.deconv_b1)
+    xw1_norm = tf.layers.batch_normalization(deconv_xw1, training=self.training)
+    deconv_h1 = tf.nn.leaky_relu(xw1_norm + self.deconv_b1)
     deconv_xw2 = tf.nn.conv2d_transpose(deconv_h1, self.deconv_w2,output_shape=[self.batch_size,28,28,64], strides=[1, 2, 2, 1])
-    deconv_h2 = tf.nn.leaky_relu(deconv_xw2 + self.deconv_b2)
+    xw2_norm = tf.layers.batch_normalization(deconv_xw2, training=self.training)
+    deconv_h2 = tf.nn.leaky_relu(xw2_norm + self.deconv_b2)
     deconv_xw3 = tf.nn.conv2d_transpose(deconv_h2, self.deconv_w3,output_shape=[self.batch_size,28,28,1], strides=[1, 1, 1, 1])
-    deconv_h3 = tf.nn.leaky_relu(deconv_xw3 + self.deconv_b3)
-    out_layer = tf.nn.sigmoid(deconv_h3)
+    out_layer = tf.nn.sigmoid(deconv_xw3)
     return out_layer
 
 class Discriminator:
@@ -58,24 +60,34 @@ class Discriminator:
     self.conv_b3 = tf.Variable(tf.constant(0.1, shape=[128]), name='db3') 
     self.conv_b4 = tf.Variable(tf.constant(0.1, shape=[256]), name='db4') 
     self.conv_b5 = tf.Variable(tf.constant(0.1, shape=[256]), name='db5') 
-    self.linear_w = tf.Variable(glorot_init([7*7*256, 1]))
-    self.linear_b = tf.Variable(glorot_init([1]))
-  
+    self.linear_w1 = tf.Variable(glorot_init([7*7*256, 300]))
+    self.linear_b1 = tf.Variable(glorot_init([300]))
+    self.linear_w2 = tf.Variable(glorot_init([300, 1]))
+    self.linear_b2 = tf.Variable(glorot_init([1]))
+    self.training = True
+
   # Build Discriminator Graph
   def __call__(self, x):
     conv_xw1 = tf.nn.conv2d(x,self.conv_w1,strides=[1, 1, 1, 1], padding='SAME')
-    conv_h1 = tf.nn.leaky_relu(conv_xw1 + self.conv_b1)
+    xw1_norm = tf.layers.batch_normalization(conv_xw1, training=self.training)
+    conv_h1 = tf.nn.leaky_relu(xw1_norm + self.conv_b1)
     conv_xw2 = tf.nn.conv2d(conv_h1,self.conv_w2,strides=[1, 2, 2, 1], padding='SAME')
-    conv_h2 = tf.nn.leaky_relu(conv_xw2 + self.conv_b2)
+    xw2_norm = tf.layers.batch_normalization(conv_xw2, training=self.training)
+    conv_h2 = tf.nn.leaky_relu(xw2_norm + self.conv_b2)
     conv_xw3 = tf.nn.conv2d(conv_h2,self.conv_w3,strides=[1, 1, 1, 1], padding='SAME')
-    conv_h3 = tf.nn.leaky_relu(conv_xw3 + self.conv_b3)
+    xw3_norm = tf.layers.batch_normalization(conv_xw3, training=self.training)
+    conv_h3 = tf.nn.leaky_relu(xw3_norm + self.conv_b3)
     conv_xw4 = tf.nn.conv2d(conv_h3,self.conv_w4,strides=[1, 2, 2, 1], padding='SAME')
-    conv_h4 = tf.nn.leaky_relu(conv_xw4 + self.conv_b4)
+    xw4_norm = tf.layers.batch_normalization(conv_xw4, training=self.training)
+    conv_h4 = tf.nn.leaky_relu(xw4_norm + self.conv_b4)
     conv_xw5 = tf.nn.conv2d(conv_h4,self.conv_w5,strides=[1, 1, 1, 1], padding='SAME')
-    conv_h5 = tf.nn.leaky_relu(conv_xw5 + self.conv_b5)
+    xw5_norm = tf.layers.batch_normalization(conv_xw5, training=self.training)
+    conv_h5 = tf.nn.leaky_relu(xw5_norm + self.conv_b5)
     conv_h5_flat = tf.reshape(conv_h5, [-1, 7*7*256])
-    out = tf.tanh(tf.matmul(conv_h5_flat, self.linear_w) + self.linear_b)
-    # out = tf.matmul(conv_h5_flat, self.linear_w) + self.linear_b
+    linear1 = tf.matmul(conv_h5_flat, self.linear_w1) + self.linear_b1
+    linear1 = tf.nn.leaky_relu(linear1)
+
+    out = tf.sigmoid(tf.matmul(linear1, self.linear_w2) + self.linear_b2)
     return out
 
 
