@@ -316,7 +316,7 @@ def train_GAN_MI(sess, Epoch):
       print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f' % (i, gl, dl))
       #plot the gan image for every 2 epoch
       if i % 5 == 0:
-        plot_gan_image(i, sess)
+        plot_gan_image(str(i), sess)
             
 #Will not run when file is imported by other files
 if __name__ == '__main__':
