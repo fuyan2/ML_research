@@ -249,7 +249,7 @@ def show_image(array):
   adv_img = plt.imshow(np.reshape(array, (28, 28)), cmap="gray", vmin=array.min(), vmax=array.max())
   plt.show(adv_img)
 
-def plot_gan_image(epoch):
+def plot_gan_image(epoch, sess):
   #Finish Training the GAN
   gen.training = False
   discrim.training = False
@@ -316,11 +316,11 @@ def train_GAN_MI(sess, Epoch):
       print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f' % (i, gl, dl))
       #plot the gan image for every 2 epoch
       if i % 5 == 0:
-        plot_gan_image(i)
+        plot_gan_image(i, sess)
             
 #Will not run when file is imported by other files
 if __name__ == '__main__':
-  acc = train(0.001, 0.1, 5000, 250)
+  acc = train(0.001, 0.1, 2000, 250)
   # init_vars = tf.global_variables_initializer()
   # with tf.Session() as sess:
   #   sess.run(init_vars)
