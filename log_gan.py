@@ -190,7 +190,9 @@ def wgan_grad_pen(batch_size,x,G_sample):
 
 #This op expects unscaled logits, since it performs a softmax on logits internally for efficiency. Do not call this op with the output of softmax, as it will produce incorrect results.
 gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=desired_label, logits=z))
-gen_loss = -tf.reduce_mean(tf.log(tf.maximum(0.001, disc_fake))) + gan_class_loss
+gan_class_beta = 0.1
+lam_gp = 2
+gen_loss = -tf.reduce_mean(tf.log(tf.maximum(0.001, disc_fake))) + gan_class_beta*gan_class_loss
 disc_loss = -tf.reduce_mean(tf.log(tf.maximum(0.001, disc_real)) + tf.log(tf.maximum(0.001, 1. - disc_fake))) + lam_gp*wgan_grad_pen(gan_batch_size,real_input, gen_sample_reshape)
 
 # Build Optimizers
@@ -239,7 +241,7 @@ def train(loss_beta, learning_rate, Epoch, Batch):
     test_acc = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
     print("beta is %g, test accuracy is %g"%(loss_beta, test_acc))
     
-    train_GAN_MI(sess, 50) 
+    train_GAN_MI(sess, 250) 
 
     return test_acc
 
@@ -247,36 +249,7 @@ def show_image(array):
   adv_img = plt.imshow(np.reshape(array, (28, 28)), cmap="gray", vmin=array.min(), vmax=array.max())
   plt.show(adv_img)
 
-def train_GAN_MI(sess, Epoch):
-  steps_per_epoch = int(letters_size/ gan_batch_size)
-  #Update Mean and Variance of batch normalization during training
-  update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
-  with tf.control_dependencies(update_ops):
-    # initialise iterator with letters train data
-    sess.run(iter.initializer, feed_dict = {features: letters_x_train, labels: letters_y_train, batch_size: gan_batch_size, sample_size: 10000})
-
-    for i in range(0, Epoch):
-      for step in range(0, 10):
-        # Get the next batch of MNIST data (only images are needed, not labels)
-        batch_x, batch_y = sess.run(next_batch)
-        # Aux label used to compute similarity
-        aux_label = sess.run(y_ml, feed_dict={x: batch_x})
-        # Sample random noise 
-        z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
-        # Pass random noise into the generator and get generated image
-        gen_mi = sess.run(gen_sample, feed_dict={gen_input:z, desired_label: aux_label}) 
-        gen_mi = np.reshape(gen_mi, [gan_batch_size, 28*28])
-
-        # Train Generator
-        train_disc.run(feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
-
-        #train one discriminator for every 5 generator
-        if step % 5 == 0:
-          train_GAN.run(feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
-
-      gl,dl = sess.run([gen_loss, disc_loss], feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
-      print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f' % (i, gl, dl))
-            
+def plot_gan_image(epoch):
   #Finish Training the GAN
   gen.training = False
   discrim.training = False
@@ -305,11 +278,49 @@ def train_GAN_MI(sess, Epoch):
 
   # f.show()
   plt.draw()
-  plt.savefig('LOG_GAN_MI_1GEN_5DIS')
+  plt.savefig('log_gan_epoch_'+epoch)
+  #Continue Training
+  gen.training = True
+  discrim.training = True  
 
+
+
+def train_GAN_MI(sess, Epoch):
+  steps_per_epoch = int(letters_size/ gan_batch_size)
+  #Update Mean and Variance of batch normalization during training
+  update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+  with tf.control_dependencies(update_ops):
+    # initialise iterator with letters train data
+    sess.run(iter.initializer, feed_dict = {features: letters_x_train, labels: letters_y_train, batch_size: gan_batch_size, sample_size: 10000})
+
+    for i in range(0, Epoch):
+      for step in range(0, steps_per_epoch):
+        # Get the next batch of MNIST data (only images are needed, not labels)
+        batch_x, batch_y = sess.run(next_batch)
+        # Aux label used to compute similarity
+        aux_label = sess.run(y_ml, feed_dict={x: batch_x})
+        # Sample random noise 
+        z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
+        # Pass random noise into the generator and get generated image
+        gen_mi = sess.run(gen_sample, feed_dict={gen_input:z, desired_label: aux_label}) 
+        gen_mi = np.reshape(gen_mi, [gan_batch_size, 28*28])
+
+        # Train Generator
+        train_disc.run(feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
+
+        #train one discriminator for every 5 generator
+        if step % 5 == 0:
+          train_GAN.run(feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
+
+      gl,dl = sess.run([gen_loss, disc_loss], feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
+      print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f' % (i, gl, dl))
+      #plot the gan image for every 2 epoch
+      if i % 5 == 0:
+        plot_gan_image(i)
+            
 #Will not run when file is imported by other files
 if __name__ == '__main__':
-  acc = train(0.001, 0.1, 200, 250)
+  acc = train(0.001, 0.1, 5000, 250)
   # init_vars = tf.global_variables_initializer()
   # with tf.Session() as sess:
   #   sess.run(init_vars)
