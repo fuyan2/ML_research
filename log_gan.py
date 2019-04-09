@@ -44,7 +44,8 @@ CONV_OUT = 7 # convolution output image dimension, calculate based on previous p
 noise_dim = 10 # Noise data points
 gan_batch_size = 250
 L2_REGULAR = 0.01
-lam_gp = 2 #gradient penalty lambda for discriminator, default 10
+GAN_CLASS_COE = 1
+lam_gp = 10 #gradient penalty lambda for discriminator, default 10
 # Initial training coefficient
 EPOCHS = 100
 learning_rate = 0.1
@@ -114,7 +115,7 @@ def inverter(y, model_weights):
 
 #Loading data
 digits_size, digits_x_train, digits_y_train, digits_x_test, digits_y_test = load_mnist('digits')
-letters_size, letters_x_train, letters_y_train, letters_x_test, letters_y_test = load_mnist('digits')
+letters_size, letters_x_train, letters_y_train, letters_x_test, letters_y_test = load_mnist('letters')
 
 #build dataset structure
 features = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
@@ -123,7 +124,7 @@ batch_size = tf.placeholder(tf.int64)
 sample_size = tf.placeholder(tf.int64)
 dataset = tf.data.Dataset.from_tensor_slices((features, labels))
 dataset = dataset.shuffle(sample_size, reshuffle_each_iteration=True)
-dataset = dataset.batch(batch_size).repeat()
+dataset = dataset.batch(batch_size, drop_remainder=True).repeat()
 
 iter = dataset.make_initializable_iterator()
 next_batch = iter.get_next()
@@ -132,9 +133,10 @@ x = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
 y = tf.placeholder(tf.float32, shape=[None, 10])
 
 #Build Logistic Layer
-with tf.name_scope("logistic_layer"):
-  w,b,z = layer(x,NUM_LABEL)
-  y_ml = tf.nn.softmax(z)
+w = tf.Variable(tf.zeros([IMG_ROWS * IMG_COLS, 10], tf.float32), name="w")
+b = tf.Variable(tf.zeros([10], tf.float32), name="b")
+z = tf.matmul(x,w) + b
+y_ml = tf.nn.softmax(z)
 
 #Build Inverter Regularizer
 model_weights = tf.concat([tf.reshape(w,[1, -1]),tf.reshape(b,[1, -1])], 1)
@@ -190,9 +192,7 @@ def wgan_grad_pen(batch_size,x,G_sample):
 
 #This op expects unscaled logits, since it performs a softmax on logits internally for efficiency. Do not call this op with the output of softmax, as it will produce incorrect results.
 gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=desired_label, logits=z))
-gan_class_beta = 0.1
-lam_gp = 2
-gen_loss = -tf.reduce_mean(tf.log(tf.maximum(0.001, disc_fake))) + gan_class_beta*gan_class_loss
+gen_loss = -tf.reduce_mean(tf.log(tf.maximum(0.001, disc_fake))) + GAN_CLASS_COE*gan_class_loss
 disc_loss = -tf.reduce_mean(tf.log(tf.maximum(0.001, disc_real)) + tf.log(tf.maximum(0.001, 1. - disc_fake))) + lam_gp*wgan_grad_pen(gan_batch_size,real_input, gen_sample_reshape)
 
 # Build Optimizers
@@ -201,11 +201,10 @@ optimizer_disc = tf.train.AdamOptimizer(learning_rate=gan_learning_rate, beta1=0
 
 # Training Variables for each optimizer
 # gen Network Variables
-gen_vars = [gen.linear_w, gen.linear_b, gen.deconv_w1, gen.deconv_w2, gen.deconv_w3, 
-            gen.deconv_b1, gen.deconv_b2, gen.deconv_b3]
+gen_vars = [gen.linear_w, gen.linear_b, gen.deconv_w1, gen.deconv_w2, gen.deconv_w3] 
+
 # Discriminator Network Variables
 disc_vars = [discrim.conv_w1, discrim.conv_w2, discrim.conv_w3, discrim.conv_w4, discrim.conv_w5,
-            discrim.conv_b1, discrim.conv_b2, discrim.conv_b3, discrim.conv_b4, discrim.conv_b5,
             discrim.linear_w1, discrim.linear_b1, discrim.linear_w2, discrim.linear_b2]
 
 # Create training operations
@@ -245,10 +244,6 @@ def train(loss_beta, learning_rate, Epoch, Batch):
 
     return test_acc
 
-def show_image(array):
-  adv_img = plt.imshow(np.reshape(array, (28, 28)), cmap="gray", vmin=array.min(), vmax=array.max())
-  plt.show(adv_img)
-
 def plot_gan_image(epoch, sess):
   #Finish Training the GAN
   gen.training = False
@@ -274,7 +269,7 @@ def plot_gan_image(epoch, sess):
           # Generate image from noise. Extend to 3 channels for matplot figure.
           img = np.reshape(np.repeat(g[j][:, :, np.newaxis], 3, axis=2),
                            newshape=(28, 28, 3))
-          a[j][i].imshow(img)
+          a[j][i].imshow(img, origin='lower')
 
   # f.show()
   plt.draw()
@@ -282,8 +277,6 @@ def plot_gan_image(epoch, sess):
   #Continue Training
   gen.training = True
   discrim.training = True  
-
-
 
 def train_GAN_MI(sess, Epoch):
   steps_per_epoch = int(letters_size/ gan_batch_size)
@@ -299,6 +292,12 @@ def train_GAN_MI(sess, Epoch):
         batch_x, batch_y = sess.run(next_batch)
         # Aux label used to compute similarity
         aux_label = sess.run(y_ml, feed_dict={x: batch_x})
+        # aux_label = tf.one_hot(tf.argmax(aux_label, 1), 10)
+
+        #Just train for image 3
+        # aux_label = np.zeros([gan_batch_size, 10])
+        # aux_label[:,3] = 1
+
         # Sample random noise 
         z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
         # Pass random noise into the generator and get generated image
@@ -306,21 +305,23 @@ def train_GAN_MI(sess, Epoch):
         gen_mi = np.reshape(gen_mi, [gan_batch_size, 28*28])
 
         # Train Generator
-        train_disc.run(feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
+        # print("batch_x:", batch_x.shape, "z:", z.shape, "gen_mi:", gen_mi.shape)
+        if step % 3 == 0:
+          train_disc.run(feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
 
         #train one discriminator for every 5 generator
-        if step % 5 == 0:
-          train_GAN.run(feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
+        # if step % 5 == 0:
+        train_GAN.run(feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
 
       gl,dl = sess.run([gen_loss, disc_loss], feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
       print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f' % (i, gl, dl))
       #plot the gan image for every 2 epoch
-      if i % 5 == 0:
-        plot_gan_image(str(i), sess)
+      # if i % 5 == 0:
+      plot_gan_image(str(i), sess)
             
 #Will not run when file is imported by other files
 if __name__ == '__main__':
-  acc = train(0.001, 0.1, 2000, 250)
+  acc = train(0.001, 0.1, 10000, 250)
   # init_vars = tf.global_variables_initializer()
   # with tf.Session() as sess:
   #   sess.run(init_vars)
