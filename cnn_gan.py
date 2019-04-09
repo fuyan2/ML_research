@@ -110,7 +110,7 @@ def inverter(y, model_weights):
 
 #Loading data
 digits_size, digits_x_train, digits_y_train, digits_x_test, digits_y_test = load_mnist('digits')
-letters_size, letters_x_train, letters_y_train, letters_x_test, letters_y_test = load_mnist('digits')
+letters_size, letters_x_train, letters_y_train, letters_x_test, letters_y_test = load_mnist('letters')
 
 #build dataset structure
 features = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
@@ -232,13 +232,15 @@ train_GAN = optimizer_gen.minimize(gen_loss, var_list=gen_vars)
 train_disc = optimizer_disc.minimize(disc_loss, var_list=disc_vars)
 
 def train(loss_beta, learning_rate, Epoch, Batch):
+  #!
   # total_loss = class_loss - loss_beta * mi_loss
-  total_loss = class_loss + loss_beta * tf.norm(model_weights)
+  total_loss = class_loss
   steps_per_epoch = int(digits_size/ BATCH_SIZE)
   global_step = tf.train.get_or_create_global_step()
   learn_rate = tf.train.exponential_decay(1e-3, global_step, decay_steps=2*steps_per_epoch, decay_rate=0.97, staircase=True)
   model_optimizer = tf.train.AdamOptimizer(learn_rate).minimize(total_loss, var_list=[conv_w1, conv_w2, conv_b1, conv_b2, full_w, full_b, out_w, out_b])
-  inverter_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(inv_loss)
+  #!
+  # inverter_optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(inv_loss)
   init_vars = tf.global_variables_initializer()
   
   with tf.Session() as sess:
@@ -252,7 +254,7 @@ def train(loss_beta, learning_rate, Epoch, Batch):
       for step in range(steps_per_epoch):
         batch = sess.run(next_batch)
         model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
-        inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
+        #inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
       train_accuracy = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
       print('Epoch %d, training accuracy %g' % (i, train_accuracy))    
     
@@ -342,5 +344,5 @@ def train_GAN_MI(sess, Epoch):
 
 #Will not run when file is imported by other files
 if __name__ == '__main__':
-  acc = train(0.001, 0.1, 2, 200)
+  acc = train(0.001, 0.1, 30, 200)
   # acc = train(0.001, 0.1, 30, 200)
