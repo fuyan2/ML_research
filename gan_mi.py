@@ -79,7 +79,8 @@ class Discriminator:
     linear1 = tf.matmul(conv_h5_flat, self.linear_w1) + self.linear_b1
     linear1 = tf.nn.leaky_relu(linear1)
 
-    out = tf.sigmoid(tf.matmul(linear1, self.linear_w2) + self.linear_b2)
+    out = tf.matmul(linear1, self.linear_w2) + self.linear_b2
+    #! out = tf.sigmoid(out)
     return out
 
 

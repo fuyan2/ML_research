@@ -160,8 +160,8 @@ correct = tf.equal(tf.argmax(y_ml, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
 def train(loss_beta, learning_rate, Epoch, Batch, LABEL=None):
-  # total_loss = class_loss - loss_beta * mi_loss
-  total_loss = class_loss + loss_beta * tf.norm(model_weights)
+  total_loss = class_loss - loss_beta * mi_loss
+  # total_loss = class_loss + loss_beta * tf.norm(model_weights)
   steps_per_batch = int(mnist.train.num_examples / BATCH_SIZE)
   global_step = tf.train.get_or_create_global_step()
   learn_rate = tf.train.exponential_decay(1e-3, global_step, decay_steps=2*steps_per_batch, decay_rate=0.97, staircase=True)
