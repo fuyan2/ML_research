@@ -43,12 +43,12 @@ DEPTH_1 = 32 # num output feature maps for first layer
 DEPTH_2 = 64
 HIDDEN_UNIT = 1024
 CONV_OUT = 7 # convolution output image dimension, calculate based on previous parameters
-noise_dim = 128 # Noise data points
+noise_dim = 128 #! 128 Noise data points
 gan_batch_size = 64
 L2_REGULAR = 0.01
 GAN_CLASS_COE = 1
 lam_gp = 10 
-gan_learning_rate = 0.0002
+gan_learning_rate = 0.00005 #! 0.0002
 
 # Initial training coefficient
 EPOCHS = 100
@@ -108,9 +108,9 @@ def inverter(y, model_weights):
   rect = lrelu(out_layer, 0.3)
   return rect
 
-#Loading data
+#! Loading data
 digits_size, digits_x_train, digits_y_train, digits_x_test, digits_y_test = load_mnist('digits')
-letters_size, letters_x_train, letters_y_train, letters_x_test, letters_y_test = load_mnist('letters')
+letters_size, letters_x_train, letters_y_train, letters_x_test, letters_y_test = load_mnist('digits')
 
 #build dataset structure
 features = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
@@ -204,19 +204,23 @@ def wgan_grad_pen(batch_size,x,G_sample):
     x_h = eps*x+(1-eps)*G_sample
     x_h = tf.reshape(x_h, [batch_size, 28, 28, 1])
     
-    grad_d_x_h = tf.gradients(discrim(x_h), x_h)    
-    grad_norm = tf.norm(grad_d_x_h[0], axis=1, ord='euclidean')
-    grad_pen = tf.reduce_mean(tf.square(grad_norm-1))
+    grad_d_x_h = tf.gradients(discrim(x_h), x_h)[0]  
+    grad_norm = tf.norm(grad_d_x_h, axis=1, ord='euclidean')
+    grad_pen = tf.reduce_mean(tf.square(grad_norm - 1.))
   
     return grad_pen
 
 gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=desired_label, logits=y_ml))
-gen_loss = -tf.reduce_mean(tf.log(tf.maximum(0.001, disc_fake))) + GAN_CLASS_COE*gan_class_loss
-#!
-disc_loss = -tf.reduce_mean(tf.log(tf.maximum(0.001, disc_real)) + tf.log(tf.maximum(0.001, 1. - disc_fake))) + lam_gp*wgan_grad_pen(gan_batch_size,real_input, gen_sample_reshape)
+
+#gen_loss = -tf.reduce_mean(tf.log(tf.maximum(0.001, disc_fake)))# + GAN_CLASS_COE*gan_class_loss
+#disc_loss = -tf.reduce_mean(tf.log(tf.maximum(0.001, disc_real)) + tf.log(tf.maximum(0.001, 1. - disc_fake))) + lam_gp*wgan_grad_pen(gan_batch_size,real_input, gen_sample_reshape)
+
+#Improved WGAN with gradient penalty
+gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss
+disc_loss = -tf.reduce_mean(disc_real) + tf.reduce_mean(disc_fake) + lam_gp*wgan_grad_pen(gan_batch_size,real_input, gen_sample_reshape)
 
 # Build Optimizers
-optimizer_gen = tf.train.AdamOptimizer(learning_rate=gan_learning_rate, beta1=0.5, beta2=0.999)
+optimizer_gen = tf.train.AdamOptimizer(learning_rate=gan_learning_rate, beta1=0.5, beta2=0.999) #! 0.999
 optimizer_disc = tf.train.AdamOptimizer(learning_rate=gan_learning_rate, beta1=0.5, beta2=0.999)
 
 # Training Variables for each optimizer
@@ -267,7 +271,7 @@ def train(loss_beta, learning_rate, Epoch, Batch):
     train_GAN_MI(sess, 150) 
     return test_acc
 
-def plot_gan_image(epoch, sess):
+def plot_gan_image(name, epoch, sess):
   #Finish Training the GAN
   gen.training = False
   discrim.training = False
@@ -296,7 +300,7 @@ def plot_gan_image(epoch, sess):
 
   # f.show()
   plt.draw()
-  plt.savefig('log_gan_epoch_'+epoch)
+  plt.savefig(name+epoch)
   #Continue Training
   gen.training = True
   discrim.training = True 
@@ -328,21 +332,21 @@ def train_GAN_MI(sess, Epoch):
         gen_mi = sess.run(gen_sample, feed_dict={gen_input:z, desired_label: aux_label}) 
         gen_mi = np.reshape(gen_mi, [gan_batch_size, 28*28])
 
-        #! Train Generator
-        #if step % 5 == 0:
+        #! Train Discriminator
+        # if step % 5 == 0:
         train_disc.run(feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
 
-        #train one discriminator for every 5 generator
-        # if step % 5 == 0:
-        train_GAN.run(feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
+        #Train Generator
+        if step % 5 == 0:
+          train_GAN.run(feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
 
       gl,dl = sess.run([gen_loss, disc_loss], feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
       print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f' % (i, gl, dl))
       #plot the gan image for every 2 epoch
       # if i % 5 == 0:
-      plot_gan_image(str(i), sess)       
+      plot_gan_image('cnn_samedt_noinv_wasser_5gan_epoch',str(i), sess)       
 
 #Will not run when file is imported by other files
 if __name__ == '__main__':
-  acc = train(0.001, 0.1, 30, 200)
-  # acc = train(0.001, 0.1, 30, 200)
+  acc = train(0.001, 0.1, 3, 200)
+  #! acc = train(0.001, 0.1, 30, 200)
