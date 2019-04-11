@@ -46,9 +46,9 @@ CONV_OUT = 7 # convolution output image dimension, calculate based on previous p
 noise_dim = 128 #! 128 Noise data points
 gan_batch_size = 64
 L2_REGULAR = 0.01
-GAN_CLASS_COE = 1
+GAN_CLASS_COE = 10 #!
 lam_gp = 10 
-gan_learning_rate = 0.00005 #! 0.0002
+gan_learning_rate = 0.00002 #! 0.0002, 0.00005
 
 # Initial training coefficient
 EPOCHS = 100
@@ -110,7 +110,7 @@ def inverter(y, model_weights):
 
 #! Loading data
 digits_size, digits_x_train, digits_y_train, digits_x_test, digits_y_test = load_mnist('digits')
-letters_size, letters_x_train, letters_y_train, letters_x_test, letters_y_test = load_mnist('digits')
+letters_size, letters_x_train, letters_y_train, letters_x_test, letters_y_test = load_mnist('letters')
 
 #build dataset structure
 features = tf.placeholder(tf.float32, shape=[None, IMG_ROWS * IMG_COLS])
@@ -291,7 +291,7 @@ def plot_gan_image(name, epoch, sess):
       g = g[:5,:]
 
       # Reverse colours for better display
-      g = -1 * (g - 1)
+      #g = -1 * (g - 1)
       for j in range(5):
           # Generate image from noise. Extend to 3 channels for matplot figure.
           img = np.reshape(np.repeat(g[j][:, :, np.newaxis], 3, axis=2),
@@ -344,7 +344,7 @@ def train_GAN_MI(sess, Epoch):
       print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f' % (i, gl, dl))
       #plot the gan image for every 2 epoch
       # if i % 5 == 0:
-      plot_gan_image('cnn_samedt_noinv_wasser_5gan_epoch',str(i), sess)       
+      plot_gan_image('cnn_diffdt_noinv_wasser_5dis_epoch',str(i), sess)       
 
 #Will not run when file is imported by other files
 if __name__ == '__main__':
