@@ -29,7 +29,7 @@ import multiprocessing as mp
 from datetime import datetime
 # from skimage.measure import compare_ssim
 import math
-from gan_mi import Generator, Discriminator
+from snwgan import Generator, Discriminator
 
 
 #GAN Graph Structure
@@ -310,6 +310,8 @@ def train_GAN_MI(sess, Epoch):
 
   #Update Mean and Variance of batch normalization during traininEpoch %i: Generator Loss: %f, Discriminator Loss: %f' % (i, gl, dl))g
   update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+  SPECTRAL_NORM_UPDATE_OPS = "spectral_norm_update_ops"
+  spectral_norm_update_ops = tf.get_collection(SPECTRAL_NORM_UPDATE_OPS)
   with tf.control_dependencies(update_ops):
     # initialise iterator with letters train data
     sess.run(iter.initializer, feed_dict = {features: letters_x_train, labels: letters_y_train, batch_size: gan_batch_size, sample_size: 10000})
@@ -340,6 +342,9 @@ def train_GAN_MI(sess, Epoch):
         if step % 5 == 0:
           train_GAN.run(feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
 
+        for update_op in spectral_norm_update_ops:
+          sess.run(update_op)
+
       gl,dl = sess.run([gen_loss, disc_loss], feed_dict={real_input: batch_x,  gen_input: z, x: gen_mi, desired_label: aux_label})
       print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f' % (i, gl, dl))
       #plot the gan image for every 2 epoch
@@ -348,5 +353,5 @@ def train_GAN_MI(sess, Epoch):
 
 #Will not run when file is imported by other files
 if __name__ == '__main__':
-  acc = train(0.001, 0.1, 3, 200)
-  #! acc = train(0.001, 0.1, 30, 200)
+  # !acc = train(0.001, 0.1, 3, 200)
+  acc = train(0.001, 0.1, 30, 200)
