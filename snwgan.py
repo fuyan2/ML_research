@@ -49,8 +49,8 @@ class Generator:
     xw2_norm = tf.layers.batch_normalization(deconv_xw2, training=self.training)
     deconv_h2 = tf.nn.leaky_relu(xw2_norm + self.deconv_b2)
     deconv_xw3 = tf.nn.conv2d_transpose(deconv_h2, self.deconv_w3,output_shape=[self.batch_size,28,28,1], strides=[1, 1, 1, 1])
-    out_layer = tf.nn.sigmoid(deconv_xw3)
-    # out_layer = tf.nn.tanh(deconv_xw3)
+    # out_layer = tf.nn.sigmoid(deconv_xw3)
+    out_layer = tf.nn.tanh(deconv_xw3)
     return out_layer
 
 class Discriminator:
