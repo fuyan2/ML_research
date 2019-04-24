@@ -225,12 +225,12 @@ optimizer_disc = tf.train.AdamOptimizer(learning_rate=gan_learning_rate, beta1=0
 
 # Training Variables for each optimizer
 # gen Network Variables
-gen_vars = [gen.linear_w, gen.linear_b, gen.deconv_w1, gen.deconv_w2, gen.deconv_w3, 
-            gen.deconv_b1, gen.deconv_b2, gen.deconv_b3]
+gen_vars = [gen.linear_w, gen.linear_b, gen.deconv_w1, gen.deconv_w2, gen.deconv_w3] 
+            # gen.deconv_b1, gen.deconv_b2, gen.deconv_b3]
 
 # Discriminator Network Variables
 disc_vars = [discrim.conv_w1, discrim.conv_w2, discrim.conv_w3, discrim.conv_w4, discrim.conv_w5,
-            discrim.conv_b1, discrim.conv_b2, discrim.conv_b3, discrim.conv_b4, discrim.conv_b5,
+            # discrim.conv_b1, discrim.conv_b2, discrim.conv_b3, discrim.conv_b4, discrim.conv_b5,
             discrim.linear_w1, discrim.linear_b1, discrim.linear_w2, discrim.linear_b2]
 
 # Create training operations
