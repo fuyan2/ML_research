@@ -93,10 +93,10 @@ class Discriminator:
     xw5_norm = tf.layers.batch_normalization(conv_xw5, training=self.training)
     conv_h5 = tf.nn.leaky_relu(xw5_norm)
     conv_h5_flat = tf.reshape(conv_h5, [-1, 7*7*256])
-    linear1 = tf.matmul(conv_h5_flat, spectral_normed_weight(self.linear_w1)) + self.linear_b1
+    linear1 = tf.matmul(conv_h5_flat, spectral_normed_weight(self.linear_w1, num_iters=1, update_collection=SPECTRAL_NORM_UPDATE_OPS)) + self.linear_b1
     linear1 = tf.nn.leaky_relu(linear1)
 
-    out = tf.matmul(linear1, spectral_normed_weight(self.linear_w2)) + self.linear_b2
+    out = tf.matmul(linear1, spectral_normed_weight(self.linear_w2, num_iters=1, update_collection=SPECTRAL_NORM_UPDATE_OPS)) + self.linear_b2
     #! out = tf.sigmoid(out)
     return out
 
