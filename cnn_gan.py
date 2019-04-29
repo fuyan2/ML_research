@@ -253,7 +253,7 @@ def train(loss_beta, learning_rate, Epoch, Batch):
     sess.run(init_vars)
    
     # initialise iterator with train data
-    sess.run(iter.initializer, feed_dict = {features: digits_x_train, labels: digits_y_train, batch_size: Batch, sample_size: 10000})
+    sess.run(iter.initializer, feed_dict = {features: digits_x_train, labels: digits_y_train, batch_size: Batch, sample_size: 70000})
     
     print('Beta %g Training...'%(loss_beta))
     for i in range(Epoch):
@@ -265,10 +265,10 @@ def train(loss_beta, learning_rate, Epoch, Batch):
       print('Epoch %d, training accuracy %g' % (i, train_accuracy))    
     
     # initialise iterator with test data
-    # sess.run(iter.initializer, feed_dict = {features: digits_x_test, labels: digits_y_test, batch_size: digits_y_test.shape[0], sample_size: 1})
-    # batch = sess.run(next_batch)
-    # test_acc = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
-    # print("beta is %g, test accuracy is %g"%(loss_beta, test_acc))
+    sess.run(iter.initializer, feed_dict = {features: digits_x_test, labels: digits_y_test, batch_size: digits_y_test.shape[0], sample_size: 1})
+    batch = sess.run(next_batch)
+    test_acc = accuracy.eval(feed_dict={x: batch[0], y: batch[1] })
+    print("beta is %g, test accuracy is %g"%(loss_beta, test_acc))
     
     train_GAN_MI(sess, 150) 
     return test_acc
