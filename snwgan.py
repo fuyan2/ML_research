@@ -20,7 +20,7 @@ SPECTRAL_NORM_UPDATE_OPS = "spectral_norm_update_ops"
 def glorot_init(shape):
     return tf.random_normal(shape=shape, stddev=1. / tf.sqrt(shape[0] / 2.))
   
-class Generator:
+class snw_Generator:
   # Generator Parameters
   def __init__(self, noise_dim, NUM_LABEL, batch_size):
     self.batch_size = batch_size
@@ -53,7 +53,7 @@ class Generator:
     # out_layer = tf.nn.tanh(deconv_xw3)
     return out_layer
 
-class Discriminator:
+class snw_Discriminator:
   # Discriminator Parameters
   def __init__(self):
     self.conv_w1 = tf.get_variable('dw1', shape=[3, 3, 1, 64])

@@ -23,6 +23,9 @@ import numpy as np
 import tensorflow as tf
 import random
 import math
+
+from gan_mi import conv_Generator, conv_Discriminator
+from snwgan import snw_Generator, snw_Discriminator
 inf = 1e9
 
 tf.reset_default_graph()
@@ -32,7 +35,7 @@ tf.set_random_seed(1)
 num_steps = 100000
 learning_rate = 0.00002
 x_dim = 28*28
-noise_dim = 20
+noise_dim = 128 #20
 NUM_LABEL = 10
 GAN_CLASS_COE = 10
 gan_batch_size = 200
@@ -41,6 +44,7 @@ INV_HIDDEN = 100
 beta = 0.5 #1
 lemda = 0.0001
 
+cnn_gan = True
 #Fredrickson Params
 ALPHA = 80000
 BETA = 5
@@ -242,29 +246,44 @@ aux_x = tf.placeholder(tf.float32, shape=[None, x_dim])
 aux_label = model(aux_x)
 desired_label = tf.one_hot(tf.argmax(aux_label, 1), NUM_LABEL) 
 
-# Build G Network
-G = Generator(noise_dim, NUM_LABEL, gan_batch_size)
-gen_sample = G(gen_input,desired_label)
-gen_label =  model(gen_sample)
+if cnn_gan:
+  aux_x_reshape = tf.reshape(aux_x, [-1, 28, 28, 1])
+  G = snw_Generator(noise_dim, NUM_LABEL, gan_batch_size)
+  gen_sample = G(gen_input,desired_label)
+  gen_sample_reshape = tf.reshape(gen_sample, [gan_batch_size, 28*28])
+  gen_label = model(gen_sample_reshape)
 
-# Build 2 D Networks (one from noise input, one from generated samples)
-D = Disciminator()
-disc_real = D(aux_x, desired_label)
-disc_fake = D(gen_sample, desired_label)
+  D = snw_Discriminator()
+  disc_real = D(aux_x_reshape)
+  disc_fake = D(gen_sample)
+  # G Network Variables
+  gen_vars = [G.linear_w, G.linear_b, G.deconv_w1, G.deconv_w2, G.deconv_w3]
+  # D Network Variables
+  disc_vars = [D.conv_w1, D.conv_w2, D.conv_w3, D.conv_w4, D.conv_w5, D.linear_w1, D.linear_w2, D.linear_b1, D.linear_b2]
+else:
+  # Build G Networks
+  G = Generator(noise_dim, NUM_LABEL, gan_batch_size)
+  gen_sample = G(gen_input,desired_label)
+  gen_label = model(gen_sample)
+
+  # Build 2 D Networks (one from noise input, one from generated samples)
+  D = Disciminator() 
+  disc_real = D(aux_x_reshape, desired_label)
+  disc_fake = D(gen_sample, desired_label)
+
+  # G Network Variables
+  gen_vars = [G.linear_w1, G.linear_b1, G.linear_w2, G.linear_b2, G.linear_w3, G.linear_b3]
+  # D Network Variables
+  disc_vars = [D.linear_w1, D.linear_b1, D.linear_w2, D.linear_b2]
+  gen_weights = tf.concat([tf.reshape(G.linear_w1,[1, -1]),tf.reshape(G.linear_b1,[1, -1]), tf.reshape(G.linear_w2,[1, -1]), tf.reshape(G.linear_b2,[1, -1]), tf.reshape(G.linear_w3,[1, -1]), tf.reshape(G.linear_b3,[1, -1])], 1)
 
 # Build Loss
-gen_weights = tf.concat([tf.reshape(G.linear_w1,[1, -1]),tf.reshape(G.linear_b1,[1, -1]), tf.reshape(G.linear_w2,[1, -1]), tf.reshape(G.linear_b2,[1, -1]), tf.reshape(G.linear_w3,[1, -1]), tf.reshape(G.linear_b3,[1, -1])], 1)
-gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=desired_label, logits=gen_label)) + 0.007 * tf.nn.l2_loss(gen_weights)
+gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=desired_label, logits=gen_label)) #+ 0.01 * tf.nn.l2_loss(gen_weights) #0.007
 gen_loss = -tf.reduce_mean(tf.log(tf.maximum(0.00001, disc_fake))) + GAN_CLASS_COE*gan_class_loss
 disc_loss = -tf.reduce_mean(tf.log(tf.maximum(0.0000001, disc_real)) + tf.log(tf.maximum(0.0000001, 1. - disc_fake)))
 
-# G Network Variables
-gen_vars = [G.linear_w1, G.linear_b1, G.linear_w2, G.linear_b2, G.linear_w3, G.linear_b3]
-# D Network Variables
-disc_vars = [D.linear_w1, D.linear_b1, D.linear_w2, D.linear_b2]
-
 # Create training operations !
-train_gen = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(gen_loss, var_list=gen_vars)
+train_gen = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(gan_class_loss, var_list=gen_vars)
 train_disc = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(disc_loss, var_list=disc_vars)
 
 # Fredrickson Model Inversion Attack, Gradient Attack
@@ -339,16 +358,16 @@ def train_gan():
       sess.run(iterator.initializer, feed_dict = {features: digits_x_test, labels: digits_y_test, batch_size: gan_batch_size, sample_size: 40000})
       
       #Train GAN
-      for i in range(120001):      
+      for i in range(80000):      
         # Sample random noise 
         batch = sess.run(next_batch)
         z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
         #! Train Discriminator
-        train_disc.run(feed_dict={aux_x: batch[0],  gen_input: z})
-        if i % 5 == 0:
-          train_gen.run(feed_dict={aux_x: batch[0],  gen_input: z})
+        # train_disc.run(feed_dict={aux_x: batch[0],  gen_input: z})
+        # if i % 5 == 0:
+        train_gen.run(feed_dict={aux_x: batch[0],  gen_input: z})
        
-        if i % 4000 == 0:
+        if i % 200 == 0:
           gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],  gen_input: z})
           print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f, Classification loss: %f' % (i, gl, dl, cl))
           
