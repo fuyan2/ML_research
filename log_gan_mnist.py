@@ -261,6 +261,12 @@ next_batch = iterator.get_next()
 #Loading data
 digits_size, digits_x_train, digits_y_train, digits_x_test, digits_y_test = load_mnist('digits')
 letters_size, letters_x_train, letters_y_train, letters_x_test, letters_y_test = load_mnist('letters')
+reduce_train = True
+sep_point = 60000 # 50%, 25%
+if reduce_train:
+    digits_y_train = digits_y_train[:sep_point]
+    digits_x_train = digits_x_train[:sep_point, :]
+
 # print('training dataset size:', digits_size)
 avg_imgs = average_images(digits_x_train, digits_y_train)
 avg_imgs = np.where(avg_imgs<0,0, avg_imgs)
@@ -422,21 +428,21 @@ def fred_mi(i, y_conv, sess, iterate):
     print("Prediction for reconstructed image:", check_pred)
     return x_mi
 
-beta = 0
-model_l2 = 0.001
-model_loss = class_loss - beta * inv_loss + model_l2*tf.nn.l2_loss(model_weights)    
-model_optimizer = tf.train.AdamOptimizer(0.001).minimize(model_loss, var_list=[model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
+# beta = 0
+# model_l2 = 0.001
+# model_loss = class_loss - beta * inv_loss + model_l2*tf.nn.l2_loss(model_weights)    
+# model_optimizer = tf.train.AdamOptimizer(0.001).minimize(model_loss, var_list=[model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
 
 def train(beta, model_l2, test, load_model):
     # Train Classifier
-    # if test == 'l1':
-    #     print("beta is %.4f, l1 coe is %.4f"%(beta, model_l2))
-    #     model_loss = class_loss - beta * inv_loss + model_l2*tf.norm(model_weights, ord=1)
-    # else:
-    #     print("beta is %.4f, l2 coe is %.4f"%(beta, model_l2))
-    #     model_loss = class_loss - beta * inv_loss + model_l2*tf.nn.l2_loss(model_weights)
+    if test == 'l1':
+        print("beta is %.4f, l1 coe is %.4f"%(beta, model_l2))
+        model_loss = class_loss - beta * inv_loss + model_l2*tf.norm(model_weights, ord=1)
+    else:
+        print("beta is %.4f, l2 coe is %.4f"%(beta, model_l2))
+        model_loss = class_loss - beta * inv_loss + model_l2*tf.nn.l2_loss(model_weights)
     
-    # model_optimizer = tf.train.AdamOptimizer(0.001).minimize(model_loss, var_list=[model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
+    model_optimizer = tf.train.AdamOptimizer(0.001).minimize(model_loss, var_list=[model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
 
     # Initialize the variables (i.e. assign their default value)
     init = tf.global_variables_initializer()
@@ -477,55 +483,55 @@ def train(beta, model_l2, test, load_model):
             # inverted_xs = np.zeros((NUM_LABEL, x_dim))
             # ssims = np.zeros(NUM_LABEL)
             # for i in range(NUM_LABEL):
-            # fig, ax = plt.subplots(3)
-            # inverted_xs = np.zeros((3, x_dim))
-            # ssims = np.zeros(3)
-            # for i in range(3):
-            #     print("i = %d" % i)
-            #     inverted_xs[i] = fred_mi(i, y_ml, sess, 1)[0]
-            #     # row = i//5
-            #     # col = i%5
-            #     # ax[row][col]
-            #     ax[i].imshow(np.reshape(inverted_xs[i], (28, 28)), cmap="gray", origin='lower')
-            #     ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)        
-            # plt.savefig('comparison/fred/fred_mi_%fbeta_%fl2coe.png'%(beta,model_l2))
-            # dis = inverted_xs - avg_imgs[:3, :]
-            # l2_dis = np.linalg.norm(dis,ord=2,axis=1)
-            # avg_dis = np.mean(l2_dis)
-            # avg_ssim = np.mean(ssims)
+            fig, ax = plt.subplots(3)
+            inverted_xs = np.zeros((3, x_dim))
+            ssims = np.zeros(3)
+            for i in range(3):
+                print("i = %d" % i)
+                inverted_xs[i] = fred_mi(i, y_ml, sess, 1)[0]
+                # row = i//5
+                # col = i%5
+                # ax[row][col]
+                ax[i].imshow(np.reshape(inverted_xs[i], (28, 28)), cmap="gray", origin='lower')
+                ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)        
+            plt.savefig('comparison/fred/fred_mi_%fbeta_%fl2coe.png'%(beta,model_l2))
+            dis = inverted_xs - avg_imgs[:3, :]
+            l2_dis = np.linalg.norm(dis,ord=2,axis=1)
+            avg_dis = np.mean(l2_dis)
+            avg_ssim = np.mean(ssims)
 
 
             # Train GAN
             # Initialize Aux dataset for GAN train
-            sess.run(iterator.initializer, feed_dict = {features: aux_x_data, labels: aux_y_data, batch_size: gan_batch_size, sample_size: 40000})            
-            for i in range(120000):            
-                # Sample random noise 
-                batch = sess.run(next_batch)
-                z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
-                if input_desired_label:
-                    #! Train Discriminator
-                    train_disc.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
-                    if i % 5 == 0:
-                        train_gen.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
-                else:
-                    #! Train Discriminator
-                    train_disc.run(feed_dict={aux_x: batch[0],    gen_input: z})
-                    if i % 5 == 0:
-                        train_gen.run(feed_dict={aux_x: batch[0],    gen_input: z})
+            # sess.run(iterator.initializer, feed_dict = {features: aux_x_data, labels: aux_y_data, batch_size: gan_batch_size, sample_size: 40000})            
+            # for i in range(120000):            
+            #     # Sample random noise 
+            #     batch = sess.run(next_batch)
+            #     z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
+            #     if input_desired_label:
+            #         #! Train Discriminator
+            #         train_disc.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
+            #         if i % 5 == 0:
+            #             train_gen.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
+            #     else:
+            #         #! Train Discriminator
+            #         train_disc.run(feed_dict={aux_x: batch[0],    gen_input: z})
+            #         if i % 5 == 0:
+            #             train_gen.run(feed_dict={aux_x: batch[0],    gen_input: z})
 
-                if i % 2000 == 0:
-                    gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
-                    print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f, Classification loss: %f' % (i, gl, dl, cl))
+            #     if i % 2000 == 0:
+            #         gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
+            #         print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f, Classification loss: %f' % (i, gl, dl, cl))
 
-                    inverted_xs = plot_gan_image('comparison/gan/gan_out'+test+'iter', str(i), sess)
+            #         inverted_xs = plot_gan_image('comparison/gan/gan_out'+test+'iter', str(i), sess)
 
-            inverted_xs = plot_gan_image('comparison/gan/gan_out',str(50000), sess)
-            ssims = np.zeros(NUM_LABEL)
-            for i in range(NUM_LABEL):
-                ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)
-            dis = inverted_xs - avg_imgs
-            l2_dis = np.linalg.norm(dis,ord=2,axis=1)
-            avg_dis = np.mean(l2_dis)
+            # inverted_xs = plot_gan_image('comparison/gan/gan_out',str(50000), sess)
+            # ssims = np.zeros(NUM_LABEL)
+            # for i in range(NUM_LABEL):
+            #     ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)
+            # dis = inverted_xs - avg_imgs
+            # l2_dis = np.linalg.norm(dis,ord=2,axis=1)
+            # avg_dis = np.mean(l2_dis)
             avg_ssim = np.mean(ssims)
 
             if test == 'l2' or test == 'l1' or test == 'beta':
@@ -545,7 +551,7 @@ def train(beta, model_l2, test, load_model):
             #         plot_nn_image('comparison/nn/nn_out',str(i), sess)
 
 if __name__ == '__main__':
-    test = 'auxiliary'
+    test = 'l2'
     
     if test == 'l1': 
         # beta = 0
@@ -582,72 +588,74 @@ if __name__ == '__main__':
     elif test == 'l2': 
         beta = 0
         l2_coef = [0, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]
-        # distances = np.zeros(len(l2_coef))
-        # acc = np.zeros(len(l2_coef))
-        # ssims = np.zeros(len(l2_coef))
-        # load_m = False
-        # i = 0
-        # for l2 in l2_coef:
-        #     distances[i], acc[i], ssims[i] = train(beta, l2, test, load_m)    
-        #     i += 1
-        # np.save('comparison/temp/l2_dis', distances)
-        # np.save('comparison/temp/l2_acc', acc)
-        # np.save('comparison/temp/l2_ssim', ssims)
+        load_data = True
+        if load_data:
+            distances= np.load('comparison/temp/quartertrain_l2_dis.npy')
+            acc = np.load('comparison/temp/quartertrain_l2_acc.npy')
+            ssims = np.load('comparison/temp/quartertrain_l2_ssim.npy')
+        else:
+            distances = np.zeros(len(l2_coef))
+            acc = np.zeros(len(l2_coef))
+            ssims = np.zeros(len(l2_coef))
+            load_m = False
+            i = 0
+            for l2 in l2_coef:
+                distances[i], acc[i], ssims[i] = train(beta, l2, test, load_m)    
+                i += 1
+            np.save('comparison/temp/quartertrain_l2_dis', distances)
+            np.save('comparison/temp/quartertrain_l2_acc', acc)
+            np.save('comparison/temp/quartertrain_l2_ssim', ssims)
 
-        distances= np.load('comparison/temp/l2_dis.npy')
-        acc = np.load('comparison/temp/l2_acc.npy')
-        ssims = np.load('comparison/temp/l2_ssim.npy')
-        plt.show()
+        plt.close()
         plt.plot(l2_coef, distances)
         plt.xlabel('model l2 coefficient')
         plt.ylabel('sq distance between mi and avg')
-        plt.savefig('comparison/l2_coef_vs_sq_dis')
+        plt.savefig('comparison/l2_coef_vs_sq_dis_quartertrain')
         plt.close()
         plt.plot(l2_coef, acc)
         plt.xlabel('model l2 coefficient')
         plt.ylabel('accuracy')
-        plt.savefig('comparison/l2_coef_vs_accuracy')
+        plt.savefig('comparison/l2_coef_vs_accuracy_quartertrain')
         plt.close()
         plt.plot(l2_coef, ssims)
         plt.xlabel('model l2 coefficient')
         plt.ylabel('ssim between mi and avg')
-        plt.savefig('comparison/l2_coef_vs_ssim')
+        plt.savefig('comparison/l2_coef_vs_ssim_quartertrain')
 
     elif test == 'auxiliary':
-        # betas = [0, 5, 10, 20, 40, 80, 120, 160, 200, 250]
-        # betas = [0,5]
-        # l2_coef = 0.0001
-        # distances0 = np.zeros(NUM_LABEL)
-        # acc0 = np.zeros(NUM_LABEL)
-        # ssims0 = np.zeros(NUM_LABEL)
-        # distances5 = np.zeros(NUM_LABEL)
-        # acc5 = np.zeros(NUM_LABEL)
-        # ssims5 = np.zeros(NUM_LABEL)
-        # load_saved = False
+        betas = [0,5]
+        l2_coef = 0.0001
+        distances0 = np.zeros(NUM_LABEL)
+        acc0 = np.zeros(NUM_LABEL)
+        ssims0 = np.zeros(NUM_LABEL)
+        distances5 = np.zeros(NUM_LABEL)
+        acc5 = np.zeros(NUM_LABEL)
+        ssims5 = np.zeros(NUM_LABEL)
+        load_saved = False
 
-        # if load_saved:
-        #     distances0 = np.load('comparison/temp/aux_dis_beta0.npy')
-        #     ssims0 = np.load('comparison/temp/aux_ssim_beta0.npy')
+        if load_saved:
+            distances0 = np.load('comparison/temp/aux_dis_beta0.npy')
+            ssims0 = np.load('comparison/temp/aux_ssim_beta0.npy')
 
-        # else:
-        #     for i in range(NUM_LABEL):
-        #     # for i in range(5):
-        #         if i == 0:
-        #             load_m = True
-        #         else:
-        #             load_m = True
-        #         mask = digits_y_test <=i
-        #         aux_x_data = digits_x_test[mask,:]
-        #         # aux_y_data = digits_y_test[mask]
-        #         print("aux data size is ", aux_x_data.shape[0])
-        #         print('current auxiliary data is ', i)
-        #         # digits_y_train = one_hot(digits_y_train, 10) #10!
-        #         aux_y_data = one_hot(digits_y_test, 10)
-        #         aux_y_data = aux_y_data[:aux_x_data.shape[0], :]
-        #         distances0[i], ssims0[i] = train(betas[0], l2_coef, test+str(i), load_m)
+        else:
+            for i in range(NUM_LABEL):
+            # for i in range(5):
+                if i == 0:
+                    load_m = True
+                else:
+                    load_m = True
+                mask = digits_y_test <=i
+                aux_x_data = digits_x_test[mask,:]
+                # aux_y_data = digits_y_test[mask]
+                print("aux data size is ", aux_x_data.shape[0])
+                print('current auxiliary data is ', i)
+                # digits_y_train = one_hot(digits_y_train, 10) #10!
+                aux_y_data = one_hot(digits_y_test, 10)
+                aux_y_data = aux_y_data[:aux_x_data.shape[0], :]
+                distances0[i], ssims0[i] = train(betas[0], l2_coef, test+str(i), load_m)
 
-        #     np.save('comparison/temp/aux_dis_beta0', distances0)
-        #     np.save('comparison/temp/aux_ssim_beta0', ssims0)
+            np.save('comparison/temp/aux_dis_beta0', distances0)
+            np.save('comparison/temp/aux_ssim_beta0', ssims0)
 
         #     for i in range(NUM_LABEL):
         #         if i == 0:
@@ -666,8 +674,6 @@ if __name__ == '__main__':
         #     np.save('comparison/temp/aux_dis_beta5', distances5)
         #     np.save('comparison/temp/aux_ssim_beta5', ssims5)
 
-        distances0 = np.load('comparison/temp/aux_dis_beta0.npy')
-        ssims0 = np.load('comparison/temp/aux_ssim_beta0.npy')
         plt.plot(range(NUM_LABEL), distances0)
         plt.xlabel('auxiliary dataset')
         plt.ylabel('sq distance between mi and avg')
