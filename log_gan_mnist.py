@@ -153,15 +153,18 @@ class Inverter_Regularizer(object):
     def __init__(self, weight_shape):
         self.w_model =    tf.Variable(glorot_init([weight_shape, INV_HIDDEN]))
         self.w_label = tf.Variable(glorot_init([NUM_LABEL, INV_HIDDEN]))
+        self.w_aux = tf.Variable(glorot_init([x_dim, INV_HIDDEN]))
         self.w_out = tf.Variable(glorot_init([INV_HIDDEN, x_dim]))
         self.b_in = tf.Variable(tf.zeros([INV_HIDDEN]))
         self.b_out = tf.Variable(tf.zeros([x_dim]))
         
-    def __call__(self, y, model_weights):
+    def __call__(self, y, model_weights, aux):
         # Input Layer
         ww = tf.matmul(model_weights, self.w_model)
         wy = tf.matmul(y, self.w_label)
-        wt = tf.add(wy, ww)
+        wo = tf.matmul(aux, self.w_aux)
+        wh = tf.add(wy, ww)
+        wt = tf.add(wh,wo)
         hidden_layer =    tf.add(wt, self.b_in)
         rect = lrelu(hidden_layer, 0.3)
         # Output Layer
@@ -279,7 +282,6 @@ next_batch = iterator.get_next()
 #Loading data
 digits_size, digits_x_train, digits_y_train, digits_x_test, digits_y_test = load_mnist('digits')
 letters_size, letters_x_train, letters_y_train, letters_x_test, letters_y_test = load_mnist('letters')
-face_x_train, face_x_test, face_y_train, face_y_test = data_segmentation('data/ORL_faces.npz')
 
 reduce_train = False
 sep_point = 60000 # 50%, 25%
@@ -312,17 +314,19 @@ x = tf.placeholder(tf.float32, shape=[None, x_dim])
 y = tf.placeholder(tf.float32, shape=[None, NUM_LABEL])
 model = Classifier()
 y_ml = model(x)
+
 # Build Inverter Regularizer
 model_weights = tf.concat([tf.reshape(model.linear_w1,[1, -1]),tf.reshape(model.linear_b1,[1, -1])], 1) #, tf.reshape(model.linear_w2,[1, -1]), tf.reshape(model.linear_b2,[1, -1])], 1)
 weight_shape = int(model_weights.shape[1])
 inverter = Inverter_Regularizer(weight_shape)
-inv_x = inverter(y, model_weights)
+avg_digit_img_inv = tf.constant(avg_digit_img, dtype=tf.float32)
+avg_digit_img_inv_reshape = tf.reshape(avg_digit_img_inv,[1,x_dim])
+inv_x = inverter(y, model_weights, avg_digit_img_inv_reshape)
         
 # Calculate MODEL Loss
 inv_loss = tf.losses.mean_squared_error(labels=x, predictions=inv_x)
 class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y, logits=y_ml))
 
-y_pred = tf.argmax(y_ml, 1)
 correct = tf.equal(tf.argmax(y_ml, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
@@ -427,7 +431,8 @@ def fred_mi(i, y_conv, sess, iterate):
     cost_x = 1 - tf.squeeze(tf.gather(y_conv, i, axis=1), 0)
     gradient_of_cost = tf.gradients(cost_x, x)
     x_inv = x - tf.scalar_mul(LAMBDA, tf.squeeze(gradient_of_cost, 0))
-    x_mi = np.zeros((1, x_dim))
+    # x_mi = np.zeros((1, x_dim))
+    x_mi = np.reshape(avg_imgs[i,:],(1,x_dim))
     previous_costs = [inf,inf,inf,inf,inf]
 
     for i in range(ALPHA):
@@ -486,7 +491,7 @@ def train(beta, model_l2, test, load_model):
             if load_model:
                 saver.restore(sess, '/tmp/model.ckpt')
                 print("Classifier Model restored.")
-                # test_acc, y_prediction = sess.run([accuracy, y_pred], feed_dict={x: digits_x_test, y: digits_y_test})
+                # test_acc = sess.run([accuracy], feed_dict={x: digits_x_test, y: digits_y_test})
             else:
                 sess.run(iterator.initializer, feed_dict = {features: digits_x_train, labels: y_train_one_hot, batch_size: gan_batch_size, sample_size: 60000})
                 for i in range(20000):
@@ -498,8 +503,7 @@ def train(beta, model_l2, test, load_model):
     #                     print('gradients: ', gradients)
                         print('Epoch %d, training accuracy %g' % (i, train_accuracy))        
 
-                test_acc, y_prediction = sess.run([accuracy, y_pred], feed_dict={x: digits_x_test, y: y_test_one_hot})
-                # test_acc, y_prediction = sess.run([accuracy, y_pred], feed_dict={x: letters_x_test, y: letters_y_test})
+                test_acc = sess.run([accuracy], feed_dict={x: digits_x_test, y: y_test_one_hot})
                 print("test acc:", test_acc)
                 save_path = saver.save(sess, '/tmp/model.ckpt')
                 print("Model saved in path: %s" % save_path)
@@ -509,22 +513,22 @@ def train(beta, model_l2, test, load_model):
             # inverted_xs = np.zeros((NUM_LABEL, x_dim))
             # ssims = np.zeros(NUM_LABEL)
             # for i in range(NUM_LABEL):
-            # fig, ax = plt.subplots(3)
-            # inverted_xs = np.zeros((3, x_dim))
-            # ssims = np.zeros(3)
-            # for i in range(3):
-            #     print("i = %d" % i)
-            #     inverted_xs[i] = fred_mi(i, y_ml, sess, 1)[0]
-            #     # row = i//5
-            #     # col = i%5
-            #     # ax[row][col]
-            #     ax[i].imshow(np.reshape(inverted_xs[i], (28, 28)), cmap="gray", origin='lower')
-            #     ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)        
-            # plt.savefig('comparison/fred/fred_mi_%fbeta_%fl2coe.png'%(beta,model_l2))
-            # dis = inverted_xs - avg_imgs[:3, :]
-            # l2_dis = np.linalg.norm(dis,ord=2,axis=1)
-            # avg_dis = np.mean(l2_dis)
-            # avg_ssim = np.mean(ssims)
+            fig, ax = plt.subplots(5)
+            inverted_xs = np.zeros((5, x_dim))
+            ssims = np.zeros(5)
+            for i in range(5):
+                print("i = %d" % i)
+                inverted_xs[i] = fred_mi(i, y_ml, sess, 1)[0]
+                # row = i//5
+                # col = i%5
+                # ax[row][col]
+                ax[i].imshow(np.reshape(inverted_xs[i], (28, 28)), cmap="gray", origin='lower')
+                ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)        
+            plt.savefig('comparison/fred/fred_mi_%fbeta_%fl2coe.png'%(beta,model_l2))
+            dis = inverted_xs - avg_imgs[:5, :]
+            l2_dis = np.linalg.norm(dis,ord=2,axis=1)
+            avg_dis = np.mean(l2_dis)
+            avg_ssim = np.mean(ssims)
 
 
             # Train GAN
@@ -577,7 +581,7 @@ def train(beta, model_l2, test, load_model):
             #         plot_nn_image('comparison/nn/nn_out',str(i), sess)
 
 if __name__ == '__main__':
-    test = 'letters'
+    test = 'avg_img'
     
     if test == 'l1': 
         # beta = 0
