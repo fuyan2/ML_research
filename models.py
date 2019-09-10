@@ -1,9 +1,5 @@
 import tensorflow as tf
 
-x_dim = 28*28
-noise_dim = 128 #20
-NUM_LABEL = 10 #10
-
 # A custom initialization (see Xavier Glorot init)
 def glorot_init(shape):
     return tf.random_normal(shape=shape, stddev=1. / tf.sqrt(shape[0] / 2.), dtype=tf.float32)
@@ -25,7 +21,7 @@ class NN_attacker(object):
         return out_layer
 
 class NN_aux_attacker(object):
-    def __init__(self, NUM_LABEL):
+    def __init__(self, NUM_LABEL, x_dim):
         self.linear_w1 = tf.Variable(glorot_init([NUM_LABEL+x_dim, 500]),name='glw1')
         self.linear_b1 = tf.Variable(tf.zeros([500]),name='glb1')
         self.linear_w2 = tf.Variable(glorot_init([500, 50]),name='glw2')
@@ -101,8 +97,8 @@ def lrelu(x, alpha):
     return tf.nn.relu(x) - alpha * tf.nn.relu(-x)
 
 class Inverter_Regularizer(object):
-    def __init__(self, weight_shape, INV_HIDDEN):
-        self.w_model =    tf.Variable(glorot_init([weight_shape, INV_HIDDEN]))
+    def __init__(self, NUM_LABEL, x_dim, weight_shape, INV_HIDDEN):
+        self.w_model = tf.Variable(glorot_init([weight_shape, INV_HIDDEN]))
         self.w_label = tf.Variable(glorot_init([NUM_LABEL, INV_HIDDEN]))
         self.w_out = tf.Variable(glorot_init([INV_HIDDEN, x_dim]))
         self.b_in = tf.Variable(tf.zeros([INV_HIDDEN]))

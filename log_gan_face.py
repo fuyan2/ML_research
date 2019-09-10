@@ -1,4 +1,6 @@
-import matplotlib
+# Only train on first 20 people to reduce classifier dimensionality
+# Use the rest of 20 people as auxiliary image
+
 import matplotlib.pyplot as plt
 import matplotlib.image
 import numpy as np
@@ -7,6 +9,12 @@ from skimage.measure import compare_ssim
 from models import *
 from utils import *
 from snwgan import snw_Generator, snw_Discriminator
+from sklearn.datasets import fetch_olivetti_faces
+from sklearn.cluster import MiniBatchKMeans
+from sklearn import decomposition
+from os.path import dirname, abspath
+from os.path import join
+
 inf = 1e9
 
 tf.reset_default_graph()
@@ -14,26 +22,43 @@ tf.set_random_seed(1)
 
 # Training Params
 num_steps = 100000
-learning_rate = 0.00002 #0.00002
-x_dim = 10304
-noise_dim = 128 #20
+learning_rate = 1e-4 #0.00002
+x_dim = 64*64 #10304
+noise_dim = 164 #20
 NUM_LABEL = 20 #10
 GAN_CLASS_COE = 100 #10
-gan_batch_size = 1000
-num_data = 10000
-INV_HIDDEN = 100
+gan_batch_size = 40
+INV_HIDDEN = 5000
 beta = 0 #1, 0.5
 model_l2 = 0 #0.0001 
 wasserstein = True
 # cnn_gan = False
 #Fredrickson Params
-ALPHA = 100000
-BETA = 5
-GAMMA = 1
-LAMBDA = 0.06
-input_desired_label = 1
+ALPHA = 5000
+BETA = 100
+GAMMA = 0.4
+LAMBDA = 0.2
 
 one_hot = lambda x, k: np.array(x[:,None] == np.arange(k)[None, :], dtype=int)
+
+def load_ORL():  
+    print("Reading ORL faces database")
+    orl_dataset = fetch_olivetti_faces(data_home='/Users/yanfu/Documents/ML_research/data/scikit_learn_data', shuffle=False, random_state=0, download_if_missing=True)
+    orl_x_model = orl_dataset.data[:200, :]
+    orl_y_model = orl_dataset.target[:200]
+    
+    #Shuffle dataset and get test and train
+    s = np.arange(orl_x_model.shape[0])
+    np.random.shuffle(s)
+    x = orl_x_model[s]
+    y = orl_y_model[s]
+    train_x = x[:160, :]
+    train_y = y[:160]
+    test_x = x[160:, :]
+    test_y = y[160:]
+    x_aux = orl_dataset.data[200:, :]
+    y_aux = orl_dataset.target[200:]
+    return train_x, train_y, test_x, test_y, x_aux, y_aux 
 
 ###################### Build Dataset #############################
 features = tf.placeholder(tf.float32, shape=[None, x_dim])
@@ -47,35 +72,19 @@ iterator = dataset.make_initializable_iterator()
 next_batch = iterator.get_next()
 
 #Loading data
-digits_size, digits_x_train, digits_y_train, digits_x_test, digits_y_test = load_mnist('digits')
-letters_size, letters_x_train, letters_y_train, letters_x_test, letters_y_test = load_mnist('letters')
-face_x_train, face_x_test, face_y_train, face_y_test = data_segmentation('data/ORL_faces.npz', NUM_LABEL)
+#face_x_train, face_x_test, face_y_train, face_y_test = data_segmentation('data/ORL_faces.npz', NUM_LABEL)
+orl_x_train, orl_y_train, orl_x_test, orl_y_test, orl_x_aux, orl_y_aux = load_ORL()
 
-reduce_train = False
-sep_point = 60000 # 50%, 25%
-if reduce_train:
-    digits_y_train = digits_y_train[:sep_point]
-    digits_x_train = digits_x_train[:sep_point, :]
+# print('training dataset size:', orl_size)
+avg_imgs = average_images(NUM_LABEL, x_dim, orl_x_train, orl_y_train)
+# avg_imgs = np.where(avg_imgs<0,0, avg_imgs)
+# avg_imgs = np.where(avg_imgs>1, 1, avg_imgs)
+avg_orl_img = np.mean(orl_x_train, axis=0)
 
-# print('training dataset size:', digits_size)
-avg_imgs = average_images(NUM_LABEL, x_dim, digits_x_train, digits_y_train)
-avg_imgs = np.where(avg_imgs<0,0, avg_imgs)
-avg_imgs = np.where(avg_imgs>1, 1, avg_imgs)
-
-avg_digit_img = np.mean(digits_x_train, axis=0)
-
-print('train data size is ', digits_x_train.shape[0])
-print('test data size is ', digits_x_test.shape[0])
-# print("aux data size is ", aux_x_data.shape[0])
-y_train_one_hot = one_hot(digits_y_train, 10)
-y_test_one_hot = one_hot(digits_y_test, 10)
-# digits_y_train = one_hot(digits_y_train, 10) #10!
-# digits_y_test = one_hot(digits_y_test, 10)
-# aux_y_data = one_hot(aux_y_data, 10)
-
-# letters_y_train = one_hot(letters_y_train, 26) #10!
-# letters_y_test = one_hot(letters_y_test, 26)
-# aux_y_data = one_hot(aux_y_data, 26)
+print('train data size is ', orl_x_train.shape[0])
+print('test data size is ', orl_x_test.shape[0])
+y_train_one_hot = one_hot(orl_y_train, 20)
+y_test_one_hot = one_hot(orl_y_test, 20)
 
 ################### Build The Classifier ####################
 x = tf.placeholder(tf.float32, shape=[None, x_dim])
@@ -85,7 +94,7 @@ y_ml = model(x)
 # Build Inverter Regularizer
 model_weights = tf.concat([tf.reshape(model.linear_w1,[1, -1]),tf.reshape(model.linear_b1,[1, -1])], 1) #, tf.reshape(model.linear_w2,[1, -1]), tf.reshape(model.linear_b2,[1, -1])], 1)
 weight_shape = int(model_weights.shape[1])
-inverter = Inverter_Regularizer(weight_shape, INV_HIDDEN)
+inverter = Inverter_Regularizer(NUM_LABEL, x_dim, weight_shape, INV_HIDDEN)
 inv_x = inverter(y, model_weights)
         
 # Calculate MODEL Loss
@@ -106,10 +115,8 @@ gen_input = tf.placeholder(tf.float32, shape=[None, noise_dim], name='input_nois
 aux_x = tf.placeholder(tf.float32, shape=[None, x_dim])
 aux_label = model(aux_x)
 # aux_label = tf.one_hot(tf.argmax(aux_label, 1), NUM_LABEL) 
-if input_desired_label:
-    desired_label = tf.placeholder(tf.float32, shape=[None, NUM_LABEL])
-else:
-    desired_label = aux_label
+
+desired_label = tf.placeholder(tf.float32, shape=[None, NUM_LABEL])
 
 # Build G Networks
 # Use CNN gan
@@ -120,7 +127,7 @@ if cnn_gan:
     gen_sample = tf.reshape(gen_sample_unflat,[gan_batch_size, x_dim])
     gen_vars = [G.linear_w, G.linear_b, G.deconv_w1, G.deconv_w2, G.deconv_w3]
 else:
-    G = Generator(nnoise_dim, NUM_LABEL, x_dim, gan_batch_size)
+    G = Generator(noise_dim, NUM_LABEL, x_dim, gan_batch_size)
     gen_sample = G(gen_input,desired_label)
     # G Network Variables
     gen_vars = [G.linear_w1, G.linear_b1, G.linear_w2, G.linear_b2, G.linear_w3, G.linear_b3]
@@ -158,7 +165,7 @@ def wgan_grad_pen(batch_size,x,label, G_sample):
 if wasserstein:
     gen_loss = -tf.reduce_mean(similarity*disc_fake) + GAN_CLASS_COE*gan_class_loss
     disc_loss = -tf.reduce_mean(disc_real) + tf.reduce_mean(disc_fake) #+ wgan_grad_pen(gan_batch_size,aux_x, aux_label, gen_sample)
-    clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in disc_vars] #0.01!
+    clip_D = [p.assign(tf.clip_by_value(p, -0.005, 0.005)) for p in disc_vars] #0.01!
 else:  
     gen_loss = -tf.reduce_mean(similarity*tf.log(tf.maximum(0.00001, disc_fake))) + GAN_CLASS_COE*gan_class_loss
     disc_loss = -tf.reduce_mean(tf.log(tf.maximum(0.0000001, disc_real)) + tf.log(tf.maximum(0.0000001, 1. - disc_fake))) 
@@ -166,8 +173,8 @@ else:
 # Create training operations !
 if wasserstein:
     # train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(gan_class_loss, var_list=gen_vars)
-    train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(gen_loss, var_list=gen_vars)
-    train_disc = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(disc_loss, var_list=disc_vars)
+    train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-4).minimize(gen_loss, var_list=gen_vars)
+    train_disc = tf.train.RMSPropOptimizer(learning_rate=5e-4).minimize(disc_loss, var_list=disc_vars)
 else:
     train_gen = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(gen_loss, var_list=gen_vars)
     train_disc = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(disc_loss, var_list=disc_vars)
@@ -199,8 +206,8 @@ def fred_mi(i, y_conv, sess, iterate):
             print('step %d, current cost is %g' % (i, cost_x_mi))
 
      # Make background black instead of grey
-    x_mi = np.where(x_mi<0,0, x_mi)
-    x_mi = np.where(x_mi>1, 1, x_mi)
+    # x_mi = np.where(x_mi<0,0, x_mi)
+    # x_mi = np.where(x_mi>1, 1, x_mi)
 
     print('iteration hit:', i+1)
     check_pred = sess.run(correct, feed_dict={x: x_mi, y: [label_chosen] })
@@ -209,7 +216,7 @@ def fred_mi(i, y_conv, sess, iterate):
 
 def plot_gan_image(name, epoch, sess):
     # Generate images from noise, using the generator network.
-    fig, ax = plt.subplots(NUM_LABEL)
+    fig, ax = plt.subplots(4,5)
     inverted_xs = np.zeros((NUM_LABEL, x_dim))
     for i in range(NUM_LABEL):        
         # Desired label
@@ -218,16 +225,18 @@ def plot_gan_image(name, epoch, sess):
         # Noise input.
         z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
         g = sess.run([gen_sample], feed_dict={gen_input: z, desired_label: d_label})
-        g = np.reshape(g, [gan_batch_size, 28, 28])
+        g = np.reshape(g, [gan_batch_size, 64, 64])
         g = g[0,:] #only pick one image
-        inverted_xs[i] = np.reshape(g, 28*28)
+        inverted_xs[i] = np.reshape(g, 64*64)
     
         # Make background black instead of grey
-        g = np.where(g<0,0, g)
-        g = np.where(g>1, 1, g)
+        # g = np.where(g<0,0, g)
+        # g = np.where(g>1, 1, g)
 
         # for j in range(2):
-        ax[i].imshow(g, cmap="gray", origin='lower')
+        row = i//5
+        col = i%5
+        ax[row][col].imshow(g, cmap="gray")
 
     plt.savefig(name+epoch)
     return inverted_xs
@@ -246,7 +255,7 @@ def train(beta, model_l2, test, load_model):
         print("beta is %.4f, l2 coe is %.4f"%(beta, model_l2))
         model_loss = class_loss - beta * inv_loss + model_l2*tf.nn.l2_loss(model_weights)
     
-    model_optimizer = tf.train.AdamOptimizer(0.001).minimize(model_loss, var_list=[model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
+    model_optimizer = tf.train.AdamOptimizer(learning_rate).minimize(model_loss, var_list=[model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
 
     # Initialize the variables (i.e. assign their default value)
     init = tf.global_variables_initializer()
@@ -264,19 +273,19 @@ def train(beta, model_l2, test, load_model):
             if load_model:
                 saver.restore(sess, '/tmp/model.ckpt')
                 print("Classifier Model restored.")
-                # test_acc, y_prediction = sess.run([accuracy, y_pred], feed_dict={x: digits_x_test, y: digits_y_test})
+                # test_acc, y_prediction = sess.run([accuracy, y_pred], feed_dict={x: orl_x_test, y: orl_y_test})
             else:
-                sess.run(iterator.initializer, feed_dict = {features: digits_x_train, labels: y_train_one_hot, batch_size: gan_batch_size, sample_size: 60000})
-                for i in range(20000):
+                sess.run(iterator.initializer, feed_dict = {features: orl_x_train, labels: y_train_one_hot, batch_size: gan_batch_size, sample_size: 60000})
+                for i in range(10000):
                     batch = sess.run(next_batch)
                     model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
-                    inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
+                    # inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
                     if i % 1000 == 0:
-                        gradients, train_accuracy = sess.run([grad_model, accuracy], feed_dict={x: batch[0], y: batch[1] })
-    #                     print('gradients: ', gradients)
-                        print('Epoch %d, training accuracy %g' % (i, train_accuracy))        
+                        train_accuracy = sess.run(accuracy, feed_dict={x: batch[0], y: batch[1] })
+                        test_accuracy = sess.run(accuracy, feed_dict={x: orl_x_test, y: y_test_one_hot })
+                        print('Epoch %d, training accuracy %g, test accuracy %g' % (i, train_accuracy, test_accuracy))        
 
-                test_acc, y_prediction = sess.run([accuracy, y_pred], feed_dict={x: digits_x_test, y: y_test_one_hot})
+                test_acc, y_prediction = sess.run([accuracy, y_pred], feed_dict={x: orl_x_test, y: y_test_one_hot})
                 # test_acc, y_prediction = sess.run([accuracy, y_pred], feed_dict={x: letters_x_test, y: letters_y_test})
                 print("test acc:", test_acc)
                 save_path = saver.save(sess, '/tmp/model.ckpt')
@@ -287,19 +296,20 @@ def train(beta, model_l2, test, load_model):
             # inverted_xs = np.zeros((NUM_LABEL, x_dim))
             # ssims = np.zeros(NUM_LABEL)
             # for i in range(NUM_LABEL):
-            # fig, ax = plt.subplots(3)
-            # inverted_xs = np.zeros((3, x_dim))
-            # ssims = np.zeros(3)
-            # for i in range(3):
+            # fig, ax = plt.subplots(5)
+            # inverted_xs = np.zeros((5, x_dim))
+            # ssims = np.zeros(5)
+            # for i in range(5):
             #     print("i = %d" % i)
             #     inverted_xs[i] = fred_mi(i, y_ml, sess, 1)[0]
             #     # row = i//5
             #     # col = i%5
             #     # ax[row][col]
-            #     ax[i].imshow(np.reshape(inverted_xs[i], (28, 28)), cmap="gray", origin='lower')
-            #     ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)        
-            # plt.savefig('comparison/fred/fred_mi_%fbeta_%fl2coe.png'%(beta,model_l2))
-            # dis = inverted_xs - avg_imgs[:3, :]
+            #     ax[i].imshow(np.reshape(inverted_xs[i], (64, 64)), cmap="gray")
+            #     ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (64, 64)), np.reshape(inverted_xs[i], (64, 64)), data_range=1.0 - 0.0)        
+            
+            # plt.savefig('comparison/fred/fred_mi_%gbeta_%g_%s.png'%(beta,model_l2,test))
+            # dis = inverted_xs - avg_imgs[:5, :]
             # l2_dis = np.linalg.norm(dis,ord=2,axis=1)
             # avg_dis = np.mean(l2_dis)
             # avg_ssim = np.mean(ssims)
@@ -312,17 +322,11 @@ def train(beta, model_l2, test, load_model):
                 # Sample random noise 
                 batch = sess.run(next_batch)
                 z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
-                if input_desired_label:
-                    #! Train Discriminator
-                    train_disc.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
-                    if i % 5 == 0:
-                        train_gen.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
-                else:
-                    #! Train Discriminator
-                    train_disc.run(feed_dict={aux_x: batch[0],    gen_input: z})
-                    if i % 5 == 0:
-                        train_gen.run(feed_dict={aux_x: batch[0],    gen_input: z})
 
+                #! Train Discriminator
+                train_disc.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
+                if i % 5 == 0:
+                    train_gen.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
                 if i % 2000 == 0:
                     gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
                     print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f, Classification loss: %f' % (i, gl, dl, cl))
@@ -332,7 +336,7 @@ def train(beta, model_l2, test, load_model):
             inverted_xs = plot_gan_image('comparison/gan/gan_out',str(50000), sess)
             ssims = np.zeros(NUM_LABEL)
             for i in range(NUM_LABEL):
-                ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)
+                ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (64, 64)), np.reshape(inverted_xs[i], (64, 64)), data_range=1.0 - 0.0)
             dis = inverted_xs - avg_imgs
             l2_dis = np.linalg.norm(dis,ord=2,axis=1)
             avg_dis = np.mean(l2_dis)
@@ -342,164 +346,38 @@ def train(beta, model_l2, test, load_model):
                 return avg_dis, test_acc, avg_ssim
             else:
                 return avg_dis, avg_ssim
-            # return 0, 0
-            # # Train neural net attacker
-            # for i in range(80000):            
-            #     batch = sess.run(next_batch)
-            #     # train_nn.run(feed_dict={target_x: batch[0], target_y:batch[1]})
-            #     train_nn.run(feed_dict={target_y:batch[1]})
-            #     if i % 2000 == 0:
-            #         # nl = sess.run(nn_loss, feed_dict={target_x: batch[0], target_y:batch[1]})
-            #         nl = sess.run(nn_loss, feed_dict={target_y:batch[1]})
-            #         print('Epoch %i: neural net loss:%f' % (i, nl))                 
-            #         plot_nn_image('comparison/nn/nn_out',str(i), sess)
 
 if __name__ == '__main__':
-    test = 'letters'
+    test = 'other_people'
     
-    if test == 'l1': 
-        # beta = 0
-        l1_coef = [0, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]
-        distances = np.zeros(len(l1_coef))
-        acc = np.zeros(len(l1_coef))
-        ssims = np.zeros(len(l1_coef))
-        i = 0
-        for l1 in l1_coef:
-            distances[i], acc[i], ssims[i] = train(beta, l1, test)    
-            i += 1
-        np.save('comparison/temp/l1_dis', distances)
-        np.save('comparison/temp/l1_acc', acc)
-        np.save('comparison/temp/l1_ssim', ssims)
-        # distances = np.load('comparison/temp/l1_dis.npy')
-        # acc = np.load('comparison/temp/l1_acc.npy')
-        # ssims = np.load('comparison/temp/l1_ssim.npy')
-        plt.show()
-        plt.plot(l1_coef, distances)
-        plt.xlabel('model l1 coefficient')
-        plt.ylabel('sq distance between mi and avg')
-        plt.savefig('comparison/l1_coef_vs_sq_dis')
-        plt.close()
-        plt.plot(l1_coef, acc)
-        plt.xlabel('model l1 coefficient')
-        plt.ylabel('accuracy')
-        plt.savefig('comparison/l1_coef_vs_accuracy')
-        plt.close()
-        plt.plot(l1_coef, ssims)
-        plt.xlabel('model l1 coefficient')
-        plt.ylabel('ssim between mi and avg')
-        plt.savefig('comparison/l1_coef_vs_ssim')
-        
-    elif test == 'l2': 
-        beta = 0
-        l2_coef = [0, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]
-        load_data = True
-        if load_data:
-            distances= np.load('comparison/temp/quartertrain_l2_dis.npy')
-            acc = np.load('comparison/temp/quartertrain_l2_acc.npy')
-            ssims = np.load('comparison/temp/quartertrain_l2_ssim.npy')
-        else:
-            distances = np.zeros(len(l2_coef))
-            acc = np.zeros(len(l2_coef))
-            ssims = np.zeros(len(l2_coef))
-            load_m = False
-            i = 0
-            for l2 in l2_coef:
-                distances[i], acc[i], ssims[i] = train(beta, l2, test, load_m)    
-                i += 1
-            np.save('comparison/temp/quartertrain_l2_dis', distances)
-            np.save('comparison/temp/quartertrain_l2_acc', acc)
-            np.save('comparison/temp/quartertrain_l2_ssim', ssims)
-
-        plt.close()
-        plt.plot(l2_coef, distances)
-        plt.xlabel('model l2 coefficient')
-        plt.ylabel('sq distance between mi and avg')
-        plt.savefig('comparison/l2_coef_vs_sq_dis_quartertrain')
-        plt.close()
-        plt.plot(l2_coef, acc)
-        plt.xlabel('model l2 coefficient')
-        plt.ylabel('accuracy')
-        plt.savefig('comparison/l2_coef_vs_accuracy_quartertrain')
-        plt.close()
-        plt.plot(l2_coef, ssims)
-        plt.xlabel('model l2 coefficient')
-        plt.ylabel('ssim between mi and avg')
-        plt.savefig('comparison/l2_coef_vs_ssim_quartertrain')
-
-    elif test == 'auxiliary':
-        betas = [0,5]
-        l2_coef = 0.0001
-        distances0 = np.zeros(NUM_LABEL)
-        acc0 = np.zeros(NUM_LABEL)
-        ssims0 = np.zeros(NUM_LABEL)
-        distances5 = np.zeros(NUM_LABEL)
-        acc5 = np.zeros(NUM_LABEL)
-        ssims5 = np.zeros(NUM_LABEL)
-        load_saved = False
-
-        if load_saved:
-            distances0 = np.load('comparison/temp/aux_dis_beta0.npy')
-            ssims0 = np.load('comparison/temp/aux_ssim_beta0.npy')
-
-        else:
-            for i in range(NUM_LABEL):
-            # for i in range(5):
-                if i == 0:
-                    load_m = True
-                else:
-                    load_m = True
-                mask = digits_y_test <=i
-                aux_x_data = digits_x_test[mask,:]
-                # aux_y_data = digits_y_test[mask]
-                print("aux data size is ", aux_x_data.shape[0])
-                print('current auxiliary data is ', i)
-                # digits_y_train = one_hot(digits_y_train, 10) #10!
-                aux_y_data = one_hot(digits_y_test, 10)
-                aux_y_data = aux_y_data[:aux_x_data.shape[0], :]
-                distances0[i], ssims0[i] = train(betas[0], l2_coef, test+str(i), load_m)
-
-            np.save('comparison/temp/aux_dis_beta0', distances0)
-            np.save('comparison/temp/aux_ssim_beta0', ssims0)
-
-        plt.plot(range(NUM_LABEL), distances0)
-        plt.xlabel('auxiliary dataset')
-        plt.ylabel('sq distance between mi and avg')
-        plt.savefig('comparison/aux_vs_sq_dis0')
-        plt.close()
-        plt.plot(range(NUM_LABEL), ssims0)
-        plt.xlabel('auxiliary dataset')
-        plt.ylabel('ssim between mi and avg')
-        plt.savefig('comparison/aux_vs_ssim0')
-
-    elif test == 'letters':
+    if test == 'other_people':
         betas = 0
         l2_coef = 0.0001
         load_m = True
-        aux_x_data = letters_x_train
-        aux_y_data = digits_y_train
+        aux_x_data = orl_x_aux
+        aux_y_data = orl_y_train
         print("aux data size is ", aux_x_data.shape[0])
-        aux_y_data = one_hot(digits_y_train, 10)
-        aux_y_data = aux_y_data[:aux_x_data.shape[0], :]
+        aux_y_data = one_hot(orl_y_train, 20)
+        aux_x_data = aux_x_data[:aux_y_data.shape[0], :]
         distances, ssims = train(betas, l2_coef, test, load_m)
 
     elif test == 'avg_img':
         betas = 0
         l2_coef = 0.0001
         load_m = False
-        aux_x_data = np.repeat(np.reshape(avg_digit_img,[1,x_dim]),digits_y_train.shape[0], axis=0)
-        aux_y_data = digits_y_train
-        print("aux data size is ", aux_x_data.shape[0])
-        aux_y_data = one_hot(digits_y_train, 10)
+        aux_x_data = np.repeat(np.reshape(avg_orl_img,[1,x_dim]),orl_y_train.shape[0], axis=0)
+        aux_y_data = orl_y_train
+        aux_y_data = one_hot(orl_y_train, 10)
         distances, ssims = train(betas, l2_coef, test, load_m)
 
     elif test == 'no_aux':
         betas = 0
         l2_coef = 0.0001
         load_m = False
-        aux_x_data = np.repeat(np.reshape(avg_digit_img,[1,x_dim]),digits_y_train.shape[0], axis=0)
-        aux_y_data = digits_y_train
+        aux_x_data = np.repeat(np.reshape(avg_orl_img,[1,x_dim]),orl_y_train.shape[0], axis=0)
+        aux_y_data = orl_y_train
         print("aux data size is ", aux_x_data.shape[0])
-        aux_y_data = one_hot(digits_y_train, 10)
+        aux_y_data = one_hot(orl_y_train, 10)
         distances, ssims = train(betas, l2_coef, test, load_m)
 
     elif test == 'beta':
@@ -508,9 +386,9 @@ if __name__ == '__main__':
         # Use letters as aux
         load_m = False
         aux_x_data = letters_x_train
-        aux_y_data = digits_y_train
+        aux_y_data = orl_y_train
         print("aux data size is ", aux_x_data.shape[0])
-        aux_y_data = one_hot(digits_y_train, 10)
+        aux_y_data = one_hot(orl_y_train, 10)
         aux_y_data = aux_y_data[:aux_x_data.shape[0], :]
 
         distances = np.zeros(len(betas))

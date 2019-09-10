@@ -21,7 +21,8 @@ import tensorflow as tf
 import random
 import math
 from skimage.measure import compare_ssim
-
+from models import *
+from utils import *
 from snwgan import snw_Generator, snw_Discriminator
 inf = 1e9
 
@@ -49,40 +50,12 @@ GAMMA = 1
 LAMBDA = 0.06
 input_desired_label = 1
 
-# Load MNIST data
-def mnist(type):
-    def parse_labels(filename):
-            with gzip.open(filename, 'rb') as fh:
-                    magic, num_data = struct.unpack(">II", fh.read(8))
-                    return np.array(array.array("B", fh.read()), dtype=np.uint8)
-
-    def parse_images(filename):
-            with gzip.open(filename, 'rb') as fh:
-                    magic, num_data, rows, cols = struct.unpack(">IIII", fh.read(16))
-                    return np.array(array.array("B", fh.read()), dtype=np.uint8).reshape(num_data, rows, cols)
-
-    train_images = parse_images('data/emnist-'+type+'-train-images-idx3-ubyte.gz')
-    train_labels = parse_labels('data/emnist-'+type+'-train-labels-idx1-ubyte.gz')
-    test_images    = parse_images('data/emnist-'+type+'-test-images-idx3-ubyte.gz')
-    test_labels    = parse_labels('data/emnist-'+type+'-test-labels-idx1-ubyte.gz')
-
-    return train_images, train_labels, test_images, test_labels
-
 one_hot = lambda x, k: np.array(x[:,None] == np.arange(k)[None, :], dtype=int)
-
-def load_mnist(type):
-    partial_flatten = lambda x : np.reshape(x, (x.shape[0], np.prod(x.shape[1:])))        
-    train_images, train_labels, test_images, test_labels = mnist(type)
-    train_images = partial_flatten(train_images) / 255.0
-    test_images    = partial_flatten(test_images)    / 255.0
-    N_data = train_images.shape[0]
-
-    return N_data, train_images, train_labels, test_images, test_labels
 
 # A custom initialization (see Xavier Glorot init)
 def glorot_init(shape):
     return tf.random_normal(shape=shape, stddev=1. / tf.sqrt(shape[0] / 2.), dtype=tf.float32)
- 
+
 # Linear Regression 
 class NN_attacker(object):
     def __init__(self, NUM_LABEL):
@@ -195,6 +168,51 @@ class Inverter_Regularizer(object):
         out_layer = tf.add(tf.matmul(rect, self.w_out), self.b_out)
         rect = lrelu(out_layer, 0.3)
         return rect
+
+# Load MNIST data
+def mnist(type):
+    def parse_labels(filename):
+            with gzip.open(filename, 'rb') as fh:
+                    magic, num_data = struct.unpack(">II", fh.read(8))
+                    return np.array(array.array("B", fh.read()), dtype=np.uint8)
+
+    def parse_images(filename):
+            with gzip.open(filename, 'rb') as fh:
+                    magic, num_data, rows, cols = struct.unpack(">IIII", fh.read(16))
+                    return np.array(array.array("B", fh.read()), dtype=np.uint8).reshape(num_data, rows, cols)
+
+    train_images = parse_images('data/emnist-'+type+'-train-images-idx3-ubyte.gz')
+    train_labels = parse_labels('data/emnist-'+type+'-train-labels-idx1-ubyte.gz')
+    test_images    = parse_images('data/emnist-'+type+'-test-images-idx3-ubyte.gz')
+    test_labels    = parse_labels('data/emnist-'+type+'-test-labels-idx1-ubyte.gz')
+
+    return train_images, train_labels, test_images, test_labels
+
+def data_segmentation(data_path, CLASSES):
+  data = np.load(data_path)
+
+  trainX = data['trainX'] / 255
+  testX = data['testX'] / 255
+  trainY= data['trainY']
+  testY= data['testY']
+
+  trainY = np.eye(CLASSES)[trainY]
+  testY  = np.eye(CLASSES)[testY]
+
+  return trainX, testX, trainY, testY
+
+def load_mnist(type):
+    partial_flatten = lambda x : np.reshape(x, (x.shape[0], np.prod(x.shape[1:])))        
+    train_images, train_labels, test_images, test_labels = mnist(type)
+    train_images = partial_flatten(train_images) / 255.0
+    test_images    = partial_flatten(test_images)    / 255.0
+    N_data = train_images.shape[0]
+
+    return N_data, train_images, train_labels, test_images, test_labels
+
+# A custom initialization (see Xavier Glorot init)
+def glorot_init(shape):
+    return tf.random_normal(shape=shape, stddev=1. / tf.sqrt(shape[0] / 2.), dtype=tf.float32)
     
 def plot_gan_image(name, epoch, sess):
     # Generate images from noise, using the generator network.
@@ -261,7 +279,9 @@ next_batch = iterator.get_next()
 #Loading data
 digits_size, digits_x_train, digits_y_train, digits_x_test, digits_y_test = load_mnist('digits')
 letters_size, letters_x_train, letters_y_train, letters_x_test, letters_y_test = load_mnist('letters')
-reduce_train = True
+face_x_train, face_x_test, face_y_train, face_y_test = data_segmentation('data/ORL_faces.npz')
+
+reduce_train = False
 sep_point = 60000 # 50%, 25%
 if reduce_train:
     digits_y_train = digits_y_train[:sep_point]
@@ -271,16 +291,8 @@ if reduce_train:
 avg_imgs = average_images(digits_x_train, digits_y_train)
 avg_imgs = np.where(avg_imgs<0,0, avg_imgs)
 avg_imgs = np.where(avg_imgs>1, 1, avg_imgs)
-# fig, ax = plt.subplots(10)
-# for i in range(10):
-#     ax[i].imshow(np.reshape(avg_imgs[i], [28,28]), cmap="gray", origin='lower')
-# plt.savefig('log_gan_ninv/train_avg')
-# plt.close()
 
 avg_digit_img = np.mean(digits_x_train, axis=0)
-# plt.imshow(np.reshape(avg_digit_img, [28,28]), cmap="gray", origin='lower')
-# plt.savefig('comparison/digit_avg')
-# plt.close()
 
 print('train data size is ', digits_x_train.shape[0])
 print('test data size is ', digits_x_test.shape[0])
@@ -360,16 +372,30 @@ gen_weights = tf.concat([tf.reshape(G.linear_w1,[1, -1]), tf.reshape(G.linear_b1
 similarity = tf.reduce_sum(tf.multiply(aux_label, desired_label), 1, keepdims=True )
 gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=desired_label, logits=gen_label)) + 0.01 * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
 
+# Build wasserstein Loss
+def wgan_grad_pen(batch_size,x,label, G_sample):    
+    lam = 1   
+
+    eps = tf.random_uniform([batch_size,1], minval=0.0,maxval=1.0)
+    x_h = eps*x+(1-eps)*G_sample
+    # with tf.variable_scope("", reuse=True) as scope:
+    grad_d_x_h = tf.gradients(D(x_h, label), x_h)    
+    grad_norm = tf.norm(grad_d_x_h[0], axis=1, ord='euclidean')
+    grad_pen = tf.reduce_mean(tf.square(grad_norm-1))
+  
+    return lam*grad_pen
+
 if wasserstein:
     gen_loss = -tf.reduce_mean(similarity*disc_fake) + GAN_CLASS_COE*gan_class_loss
-    disc_loss = -tf.reduce_mean(disc_real) + tf.reduce_mean(disc_fake)
-    clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in disc_vars]
+    disc_loss = -tf.reduce_mean(disc_real) + tf.reduce_mean(disc_fake) #+ wgan_grad_pen(gan_batch_size,aux_x, aux_label, gen_sample)
+    clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in disc_vars] #0.01!
 else:  
     gen_loss = -tf.reduce_mean(similarity*tf.log(tf.maximum(0.00001, disc_fake))) + GAN_CLASS_COE*gan_class_loss
     disc_loss = -tf.reduce_mean(tf.log(tf.maximum(0.0000001, disc_real)) + tf.log(tf.maximum(0.0000001, 1. - disc_fake))) 
 
 # Create training operations !
 if wasserstein:
+    # train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(gan_class_loss, var_list=gen_vars)
     train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(gen_loss, var_list=gen_vars)
     train_disc = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(disc_loss, var_list=disc_vars)
 else:
@@ -483,55 +509,55 @@ def train(beta, model_l2, test, load_model):
             # inverted_xs = np.zeros((NUM_LABEL, x_dim))
             # ssims = np.zeros(NUM_LABEL)
             # for i in range(NUM_LABEL):
-            fig, ax = plt.subplots(3)
-            inverted_xs = np.zeros((3, x_dim))
-            ssims = np.zeros(3)
-            for i in range(3):
-                print("i = %d" % i)
-                inverted_xs[i] = fred_mi(i, y_ml, sess, 1)[0]
-                # row = i//5
-                # col = i%5
-                # ax[row][col]
-                ax[i].imshow(np.reshape(inverted_xs[i], (28, 28)), cmap="gray", origin='lower')
-                ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)        
-            plt.savefig('comparison/fred/fred_mi_%fbeta_%fl2coe.png'%(beta,model_l2))
-            dis = inverted_xs - avg_imgs[:3, :]
-            l2_dis = np.linalg.norm(dis,ord=2,axis=1)
-            avg_dis = np.mean(l2_dis)
-            avg_ssim = np.mean(ssims)
+            # fig, ax = plt.subplots(3)
+            # inverted_xs = np.zeros((3, x_dim))
+            # ssims = np.zeros(3)
+            # for i in range(3):
+            #     print("i = %d" % i)
+            #     inverted_xs[i] = fred_mi(i, y_ml, sess, 1)[0]
+            #     # row = i//5
+            #     # col = i%5
+            #     # ax[row][col]
+            #     ax[i].imshow(np.reshape(inverted_xs[i], (28, 28)), cmap="gray", origin='lower')
+            #     ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)        
+            # plt.savefig('comparison/fred/fred_mi_%fbeta_%fl2coe.png'%(beta,model_l2))
+            # dis = inverted_xs - avg_imgs[:3, :]
+            # l2_dis = np.linalg.norm(dis,ord=2,axis=1)
+            # avg_dis = np.mean(l2_dis)
+            # avg_ssim = np.mean(ssims)
 
 
             # Train GAN
             # Initialize Aux dataset for GAN train
-            # sess.run(iterator.initializer, feed_dict = {features: aux_x_data, labels: aux_y_data, batch_size: gan_batch_size, sample_size: 40000})            
-            # for i in range(120000):            
-            #     # Sample random noise 
-            #     batch = sess.run(next_batch)
-            #     z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
-            #     if input_desired_label:
-            #         #! Train Discriminator
-            #         train_disc.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
-            #         if i % 5 == 0:
-            #             train_gen.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
-            #     else:
-            #         #! Train Discriminator
-            #         train_disc.run(feed_dict={aux_x: batch[0],    gen_input: z})
-            #         if i % 5 == 0:
-            #             train_gen.run(feed_dict={aux_x: batch[0],    gen_input: z})
+            sess.run(iterator.initializer, feed_dict = {features: aux_x_data, labels: aux_y_data, batch_size: gan_batch_size, sample_size: 40000})            
+            for i in range(80000):            
+                # Sample random noise 
+                batch = sess.run(next_batch)
+                z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
+                if input_desired_label:
+                    #! Train Discriminator
+                    train_disc.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
+                    if i % 5 == 0:
+                        train_gen.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
+                else:
+                    #! Train Discriminator
+                    train_disc.run(feed_dict={aux_x: batch[0],    gen_input: z})
+                    if i % 5 == 0:
+                        train_gen.run(feed_dict={aux_x: batch[0],    gen_input: z})
 
-            #     if i % 2000 == 0:
-            #         gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
-            #         print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f, Classification loss: %f' % (i, gl, dl, cl))
+                if i % 2000 == 0:
+                    gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
+                    print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f, Classification loss: %f' % (i, gl, dl, cl))
 
-            #         inverted_xs = plot_gan_image('comparison/gan/gan_out'+test+'iter', str(i), sess)
+                    inverted_xs = plot_gan_image('comparison/gan/gan_out'+test+'iter', str(i), sess)
 
-            # inverted_xs = plot_gan_image('comparison/gan/gan_out',str(50000), sess)
-            # ssims = np.zeros(NUM_LABEL)
-            # for i in range(NUM_LABEL):
-            #     ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)
-            # dis = inverted_xs - avg_imgs
-            # l2_dis = np.linalg.norm(dis,ord=2,axis=1)
-            # avg_dis = np.mean(l2_dis)
+            inverted_xs = plot_gan_image('comparison/gan/gan_out',str(50000), sess)
+            ssims = np.zeros(NUM_LABEL)
+            for i in range(NUM_LABEL):
+                ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)
+            dis = inverted_xs - avg_imgs
+            l2_dis = np.linalg.norm(dis,ord=2,axis=1)
+            avg_dis = np.mean(l2_dis)
             avg_ssim = np.mean(ssims)
 
             if test == 'l2' or test == 'l1' or test == 'beta':
@@ -551,24 +577,24 @@ def train(beta, model_l2, test, load_model):
             #         plot_nn_image('comparison/nn/nn_out',str(i), sess)
 
 if __name__ == '__main__':
-    test = 'l2'
+    test = 'letters'
     
     if test == 'l1': 
         # beta = 0
         l1_coef = [0, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]
-        # distances = np.zeros(len(l1_coef))
-        # acc = np.zeros(len(l1_coef))
-        # ssims = np.zeros(len(l1_coef))
-        # i = 0
-        # for l1 in l1_coef:
-        #     distances[i], acc[i], ssims[i] = train(beta, l1, test)    
-        #     i += 1
-        # np.save('comparison/temp/l1_dis', distances)
-        # np.save('comparison/temp/l1_acc', acc)
-        # np.save('comparison/temp/l1_ssim', ssims)
-        distances = np.load('comparison/temp/l1_dis.npy')
-        acc = np.load('comparison/temp/l1_acc.npy')
-        ssims = np.load('comparison/temp/l1_ssim.npy')
+        distances = np.zeros(len(l1_coef))
+        acc = np.zeros(len(l1_coef))
+        ssims = np.zeros(len(l1_coef))
+        i = 0
+        for l1 in l1_coef:
+            distances[i], acc[i], ssims[i] = train(beta, l1, test)    
+            i += 1
+        np.save('comparison/temp/l1_dis', distances)
+        np.save('comparison/temp/l1_acc', acc)
+        np.save('comparison/temp/l1_ssim', ssims)
+        # distances = np.load('comparison/temp/l1_dis.npy')
+        # acc = np.load('comparison/temp/l1_acc.npy')
+        # ssims = np.load('comparison/temp/l1_ssim.npy')
         plt.show()
         plt.plot(l1_coef, distances)
         plt.xlabel('model l1 coefficient')
@@ -657,23 +683,6 @@ if __name__ == '__main__':
             np.save('comparison/temp/aux_dis_beta0', distances0)
             np.save('comparison/temp/aux_ssim_beta0', ssims0)
 
-        #     for i in range(NUM_LABEL):
-        #         if i == 0:
-        #             load_m = False
-        #         else:
-        #             load_m = True
-        #         mask = digits_y_test <=i
-        #         aux_x_data = digits_x_test[mask,:]
-        #         # aux_y_data = digits_y_test[mask]
-        #         print("aux data size is ", aux_x_data.shape[0])
-        #         # digits_y_train = one_hot(digits_y_train, 10) #10!
-        #         aux_y_data = one_hot(digits_y_test, 10)
-        #         aux_y_data = aux_y_data[:aux_x_data.shape[0], :]
-        #         distances5[i], ssims5[i] = train(betas[1], l2_coef, test+str(i), load_m)  
-
-        #     np.save('comparison/temp/aux_dis_beta5', distances5)
-        #     np.save('comparison/temp/aux_ssim_beta5', ssims5)
-
         plt.plot(range(NUM_LABEL), distances0)
         plt.xlabel('auxiliary dataset')
         plt.ylabel('sq distance between mi and avg')
@@ -684,20 +693,10 @@ if __name__ == '__main__':
         plt.ylabel('ssim between mi and avg')
         plt.savefig('comparison/aux_vs_ssim0')
 
-        # plt.plot(range(NUM_LABEL), distances5)
-        # plt.xlabel('auxiliary dataset')
-        # plt.ylabel('sq distance between mi and avg')
-        # plt.savefig('comparison/aux_vs_sq_dis5')
-        # plt.close()
-        # plt.plot(range(NUM_LABEL), ssims5)
-        # plt.xlabel('auxiliary dataset')
-        # plt.ylabel('ssim between mi and avg')
-        # plt.savefig('comparison/aux_vs_ssim5')
-
     elif test == 'letters':
         betas = 0
         l2_coef = 0.0001
-        load_m = False
+        load_m = True
         aux_x_data = letters_x_train
         aux_y_data = digits_y_train
         print("aux data size is ", aux_x_data.shape[0])
@@ -715,24 +714,41 @@ if __name__ == '__main__':
         aux_y_data = one_hot(digits_y_train, 10)
         distances, ssims = train(betas, l2_coef, test, load_m)
 
-    elif test == 'beta':
-        betas = [0, 5, 10, 20, 40, 80, 120, 160, 200, 250]
-        # betas = [0, 5]
+    elif test == 'no_aux':
+        betas = 0
         l2_coef = 0.0001
+        load_m = False
+        aux_x_data = np.repeat(np.reshape(avg_digit_img,[1,x_dim]),digits_y_train.shape[0], axis=0)
+        aux_y_data = digits_y_train
+        print("aux data size is ", aux_x_data.shape[0])
+        aux_y_data = one_hot(digits_y_train, 10)
+        distances, ssims = train(betas, l2_coef, test, load_m)
+
+    elif test == 'beta':
+        betas = [0, 5, 10, 20, 30, 40, 60, 80, 100]
+        l2_coef = 0.0001
+        # Use letters as aux
+        load_m = False
+        aux_x_data = letters_x_train
+        aux_y_data = digits_y_train
+        print("aux data size is ", aux_x_data.shape[0])
+        aux_y_data = one_hot(digits_y_train, 10)
+        aux_y_data = aux_y_data[:aux_x_data.shape[0], :]
+
         distances = np.zeros(len(betas))
         acc = np.zeros(len(betas))
         ssims = np.zeros(len(betas))
         i = 0
         for beta in betas:
-            distances[i], acc[i], ssims[i] = train(beta, l2_coef, test)    
+            distances[i], acc[i], ssims[i] = train(beta, l2_coef, test+str(beta), load_m)    
             i += 1
         np.save('comparison/temp/beta_dis', distances)
         np.save('comparison/temp/beta_acc', acc)
         np.save('comparison/temp/beta_ssim', ssims)
-        # distances = np.load('comparison/temp/l2_dis.npy')
-        # acc = np.load('comparison/temp/l2_acc.npy')
-        # ssims = np.load('comparison/temp/l2_ssim.npy')
-        # plt.show()
+        # distances = np.load('comparison/temp/beta_dis.npy')
+        # acc = np.load('comparison/temp/beta_acc.npy')
+        # ssims = np.load('comparison/temp/beta_ssim.npy')
+        plt.show()
         plt.plot(betas, distances)
         plt.xlabel('model beta coefficient')
         plt.ylabel('sq distance between mi and avg')
