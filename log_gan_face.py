@@ -77,6 +77,12 @@ orl_x_train, orl_y_train, orl_x_test, orl_y_test, orl_x_aux, orl_y_aux = load_OR
 
 # print('training dataset size:', orl_size)
 avg_imgs = average_images(NUM_LABEL, x_dim, orl_x_train, orl_y_train)
+fig, ax = plt.subplots(4,5)
+for i in range(NUM_LABEL): 
+    row = i//5
+    col = i%5
+    ax[row][col].imshow(np.reshape(avg_imgs[i,:],(64,64)), cmap="gray")
+plt.savefig('comparison/avg_imgs')
 # avg_imgs = np.where(avg_imgs<0,0, avg_imgs)
 # avg_imgs = np.where(avg_imgs>1, 1, avg_imgs)
 avg_orl_img = np.mean(orl_x_train, axis=0)
@@ -165,7 +171,7 @@ def wgan_grad_pen(batch_size,x,label, G_sample):
 if wasserstein:
     gen_loss = -tf.reduce_mean(similarity*disc_fake) + GAN_CLASS_COE*gan_class_loss
     disc_loss = -tf.reduce_mean(disc_real) + tf.reduce_mean(disc_fake) #+ wgan_grad_pen(gan_batch_size,aux_x, aux_label, gen_sample)
-    clip_D = [p.assign(tf.clip_by_value(p, -0.005, 0.005)) for p in disc_vars] #0.01!
+    clip_D = [p.assign(tf.clip_by_value(p, -0.001, 0.001)) for p in disc_vars] #0.01!
 else:  
     gen_loss = -tf.reduce_mean(similarity*tf.log(tf.maximum(0.00001, disc_fake))) + GAN_CLASS_COE*gan_class_loss
     disc_loss = -tf.reduce_mean(tf.log(tf.maximum(0.0000001, disc_real)) + tf.log(tf.maximum(0.0000001, 1. - disc_fake))) 
@@ -349,7 +355,7 @@ def train(beta, model_l2, test, load_model):
 
 if __name__ == '__main__':
     test = 'other_people'
-    
+
     if test == 'other_people':
         betas = 0
         l2_coef = 0.0001
