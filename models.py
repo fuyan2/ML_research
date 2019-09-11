@@ -7,11 +7,11 @@ def glorot_init(shape):
 # Linear Regression 
 class NN_attacker(object):
     def __init__(self, NUM_LABEL, x_dim):
-        self.linear_w1 = tf.Variable(glorot_init([NUM_LABEL, 500]),name='glw1')
-        self.linear_b1 = tf.Variable(tf.zeros([500]),name='glb1')
-        self.linear_w2 = tf.Variable(glorot_init([500, 50]),name='glw2')
-        self.linear_b2 = tf.Variable(tf.zeros([50]),name='glb2')
-        self.linear_w3 = tf.Variable(glorot_init([50, x_dim]),name='glw3')
+        self.linear_w1 = tf.Variable(glorot_init([NUM_LABEL, 1000]),name='glw1') #500 for mnist
+        self.linear_b1 = tf.Variable(tf.zeros([1000]),name='glb1')
+        self.linear_w2 = tf.Variable(glorot_init([1000, 200]),name='glw2') #50 for mnist
+        self.linear_b2 = tf.Variable(tf.zeros([200]),name='glb2')
+        self.linear_w3 = tf.Variable(glorot_init([200, x_dim]),name='glw3')
         self.linear_b3 = tf.Variable(tf.zeros([x_dim]),name='glb3')
 
     def __call__(self, y):
@@ -40,11 +40,11 @@ class Generator(object):
     # G Parameters
     def __init__(self, noise_dim, NUM_LABEL, x_dim, batch_size):
         self.batch_size = batch_size
-        self.linear_w1 = tf.Variable(glorot_init([noise_dim+NUM_LABEL, 500]),name='glw1')
-        self.linear_b1 = tf.Variable(tf.zeros([500]),name='glb1')
-        self.linear_w2 = tf.Variable(glorot_init([500, 50]),name='glw2')
-        self.linear_b2 = tf.Variable(tf.zeros([50]),name='glb2')
-        self.linear_w3 = tf.Variable(glorot_init([50, x_dim]),name='glw3')
+        self.linear_w1 = tf.Variable(glorot_init([noise_dim+NUM_LABEL, 1000]),name='glw1') #500
+        self.linear_b1 = tf.Variable(tf.zeros([1000]),name='glb1')
+        self.linear_w2 = tf.Variable(glorot_init([1000, 200]),name='glw2') #50
+        self.linear_b2 = tf.Variable(tf.zeros([200]),name='glb2')
+        self.linear_w3 = tf.Variable(glorot_init([200, x_dim]),name='glw3')
         self.linear_b3 = tf.Variable(tf.zeros([x_dim]),name='glb3')
         
         self.training = True

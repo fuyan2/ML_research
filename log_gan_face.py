@@ -58,6 +58,8 @@ def load_ORL():
     test_y = y[160:]
     x_aux = orl_dataset.data[200:, :]
     y_aux = orl_dataset.target[200:]
+    x_aux = x_aux[s]
+    y_aux = y_aux[s]
     return train_x, train_y, test_x, test_y, x_aux, y_aux 
 
 ###################### Build Dataset #############################
@@ -154,7 +156,7 @@ gen_weights = tf.concat([tf.reshape(G.linear_w1,[1, -1]), tf.reshape(G.linear_b1
 
 # Build Loss
 similarity = tf.reduce_sum(tf.multiply(aux_label, desired_label), 1, keepdims=True )
-gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=desired_label, logits=gen_label)) + 0.0001 * tf.nn.l2_loss(gen_weights) #0.01, only need when no auxiliary
+gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=desired_label, logits=gen_label)) + 0.001 * tf.nn.l2_loss(gen_weights) #0.01, only need when no auxiliary
 
 # Build wasserstein Loss
 def wgan_grad_pen(batch_size,x,label, G_sample):    
@@ -355,12 +357,12 @@ def train(beta, model_l2, test, load_model):
                 return avg_dis, avg_ssim
 
 if __name__ == '__main__':
-    test = 'avg_img'
+    test = 'other_people'
 
     if test == 'other_people':
         betas = 0
         l2_coef = 0.0001
-        load_m = True
+        load_m = False
         aux_x_data = orl_x_aux
         aux_y_data = orl_y_train
         print("aux data size is ", aux_x_data.shape[0])
