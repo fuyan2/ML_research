@@ -12,7 +12,8 @@ from snwgan import snw_Generator, snw_Discriminator
 from sklearn.datasets import fetch_olivetti_faces
 from sklearn.cluster import MiniBatchKMeans
 from sklearn import decomposition
-from os.path import dirname, abspath
+import re
+import os
 from os.path import join
 
 inf = 1e9
@@ -23,7 +24,7 @@ tf.set_random_seed(1)
 # Training Params
 num_steps = 100000
 learning_rate = 1e-4 #0.00002
-x_dim = 64*64 #10304
+x_dim = 112*92 #10304
 noise_dim = 164 #20
 NUM_LABEL = 20 #10
 GAN_CLASS_COE = 100 #10
@@ -41,11 +42,45 @@ LAMBDA = 0.2
 
 one_hot = lambda x, k: np.array(x[:,None] == np.arange(k)[None, :], dtype=int)
 
+ 
+cur_path = os.getcwd()
+
+def read_pgm(filename, byteorder='>'):
+    """Return image data from a raw PGM file as numpy array.
+
+    Format specification: http://netpbm.sourceforge.net/doc/pgm.html
+
+    """
+    with open(filename, 'rb') as f:
+        buffer = f.read()
+    try:
+        header, width, height, maxval = re.search(
+            b"(^P5\s(?:\s*#.*[\r\n])*"
+            b"(\d+)\s(?:\s*#.*[\r\n])*"
+            b"(\d+)\s(?:\s*#.*[\r\n])*"
+            b"(\d+)\s(?:\s*#.*[\r\n]\s)*)", buffer).groups()
+    except AttributeError:
+        raise ValueError("Not a raw PGM file: '%s'" % filename)
+    return np.frombuffer(buffer,
+                            dtype='u1' if int(maxval) < 256 else byteorder+'u2',
+                            count=int(width)*int(height),
+                            offset=len(header)
+                            ).reshape((int(height), int(width)))
+    
 def load_ORL():  
     print("Reading ORL faces database")
-    orl_dataset = fetch_olivetti_faces(data_home='/Users/ouis/Documents/ML_research/data/scikit_learn_data', shuffle=False, random_state=0, download_if_missing=True)
-    orl_x_model = orl_dataset.data[:200, :]
-    orl_y_model = orl_dataset.target[:200]
+    path = join(cur_path, 'data', 'att_faces', 's')
+    data = np.zeros((400, 112*92))
+    target = np.zeros(400)
+    
+    for subject in range(40):
+        for image in range(10):
+            im = read_pgm(join(path + str(subject + 1), str(image + 1) + ".pgm"))
+            data[10 * subject + image, :] = im.flatten()
+            target[10 * subject + image] = subject
+            
+    orl_x_model = data[:200, :]
+    orl_y_model = target[:200]
     
     #Shuffle dataset and get test and train
     s = np.arange(orl_x_model.shape[0])
@@ -56,8 +91,8 @@ def load_ORL():
     train_y = y[:160]
     test_x = x[160:, :]
     test_y = y[160:]
-    x_aux = orl_dataset.data[200:, :]
-    y_aux = orl_dataset.target[200:]
+    x_aux = data[200:, :]
+    y_aux = target[200:]
     x_aux = x_aux[s]
     y_aux = y_aux[s]
     return train_x, train_y, test_x, test_y, x_aux, y_aux 
@@ -83,12 +118,12 @@ avg_imgs = average_images(NUM_LABEL, x_dim, orl_x_train, orl_y_train)
 # for i in range(NUM_LABEL): 
 #     row = i//5
 #     col = i%5
-#     ax[row][col].imshow(np.reshape(avg_imgs[i,:],(64,64)), cmap="gray")
+#     ax[row][col].imshow(np.reshape(avg_imgs[i,:],(112,92)), cmap="gray")
 # plt.savefig('comparison/avg_imgs')
 # avg_imgs = np.where(avg_imgs<0,0, avg_imgs)
 # avg_imgs = np.where(avg_imgs>1, 1, avg_imgs)
 avg_orl_img = np.mean(orl_x_train, axis=0)
-plt.imshow(np.reshape(avg_orl_img,(64,64)), cmap='gray')
+plt.imshow(np.reshape(avg_orl_img,(112,92)), cmap='gray')
 plt.savefig('comparison/avg_orl_img')
 print('train data size is ', orl_x_train.shape[0])
 print('test data size is ', orl_x_test.shape[0])
@@ -234,9 +269,9 @@ def plot_gan_image(name, epoch, sess):
         # Noise input.
         z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
         g = sess.run([gen_sample], feed_dict={gen_input: z, desired_label: d_label})
-        g = np.reshape(g, [gan_batch_size, 64, 64])
+        g = np.reshape(g, [gan_batch_size, 112, 92])
         g = g[0,:] #only pick one image
-        inverted_xs[i] = np.reshape(g, 64*64)
+        inverted_xs[i] = np.reshape(g, 112*92)
     
         # Make background black instead of grey
         # g = np.where(g<0,0, g)
@@ -314,8 +349,8 @@ def train(beta, model_l2, test, load_model):
             #     # row = i//5
             #     # col = i%5
             #     # ax[row][col]
-            #     ax[i].imshow(np.reshape(inverted_xs[i], (64, 64)), cmap="gray")
-            #     ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (64, 64)), np.reshape(inverted_xs[i], (64, 64)), data_range=1.0 - 0.0)        
+            #     ax[i].imshow(np.reshape(inverted_xs[i], (112, 92)), cmap="gray")
+            #     ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (112, 92)), np.reshape(inverted_xs[i], (112, 92)), data_range=1.0 - 0.0)        
             
             # plt.savefig('comparison/fred/fred_mi_%gbeta_%g_%s.png'%(beta,model_l2,test))
             # dis = inverted_xs - avg_imgs[:5, :]
@@ -345,7 +380,7 @@ def train(beta, model_l2, test, load_model):
             inverted_xs = plot_gan_image('comparison/gan/gan_out',str(50000), sess)
             ssims = np.zeros(NUM_LABEL)
             for i in range(NUM_LABEL):
-                ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (64, 64)), np.reshape(inverted_xs[i], (64, 64)), data_range=1.0 - 0.0)
+                ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (112, 92)), np.reshape(inverted_xs[i], (112, 92)), data_range=1.0 - 0.0)
             dis = inverted_xs - avg_imgs
             l2_dis = np.linalg.norm(dis,ord=2,axis=1)
             avg_dis = np.mean(l2_dis)
