@@ -23,8 +23,10 @@ tf.set_random_seed(1)
 
 # Training Params
 num_steps = 100000
-learning_rate = 1e-4 #0.00002
-x_dim = 112*92 #10304
+learning_rate = 5e-4 #0.00002
+xrow = 112
+xcol = 92
+x_dim = 112*92 #112*92 #10304
 noise_dim = 164 #20
 NUM_LABEL = 20 #10
 GAN_CLASS_COE = 100 #10
@@ -78,9 +80,14 @@ def load_ORL():
             im = read_pgm(join(path + str(subject + 1), str(image + 1) + ".pgm"))
             data[10 * subject + image, :] = im.flatten()
             target[10 * subject + image] = subject
-            
+      
+    data = data/255
     orl_x_model = data[:200, :]
     orl_y_model = target[:200]
+#    orl_dataset = fetch_olivetti_faces(data_home='/Users/yanfu/Documents/ML_research/data/scikit_learn_data', shuffle=False, random_state=0, download_if_missing=True)
+#    orl_x_model = orl_dataset.data[:200, :]
+#    orl_y_model = orl_dataset.target[:200]
+#    
     
     #Shuffle dataset and get test and train
     s = np.arange(orl_x_model.shape[0])
@@ -118,12 +125,12 @@ avg_imgs = average_images(NUM_LABEL, x_dim, orl_x_train, orl_y_train)
 # for i in range(NUM_LABEL): 
 #     row = i//5
 #     col = i%5
-#     ax[row][col].imshow(np.reshape(avg_imgs[i,:],(112,92)), cmap="gray")
+#     ax[row][col].imshow(np.reshape(avg_imgs[i,:],(xrow,xcol)), cmap="gray")
 # plt.savefig('comparison/avg_imgs')
-# avg_imgs = np.where(avg_imgs<0,0, avg_imgs)
-# avg_imgs = np.where(avg_imgs>1, 1, avg_imgs)
+avg_imgs = np.where(avg_imgs<0,0, avg_imgs)
+avg_imgs = np.where(avg_imgs>1, 1, avg_imgs)
 avg_orl_img = np.mean(orl_x_train, axis=0)
-plt.imshow(np.reshape(avg_orl_img,(112,92)), cmap='gray')
+plt.imshow(np.reshape(avg_orl_img,(xrow,xcol)), cmap='gray')
 plt.savefig('comparison/avg_orl_img')
 print('train data size is ', orl_x_train.shape[0])
 print('test data size is ', orl_x_test.shape[0])
@@ -150,7 +157,7 @@ correct = tf.equal(tf.argmax(y_ml, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
 # Build Optimizer !Use model_loss
-inverter_optimizer = tf.train.AdamOptimizer(0.001).minimize(inv_loss, var_list=[inverter.w_model, inverter.w_label, inverter.w_out, inverter.b_in, inverter.b_out])
+inverter_optimizer = tf.train.AdamOptimizer(learning_rate).minimize(inv_loss, var_list=[inverter.w_model, inverter.w_label, inverter.w_out, inverter.b_in, inverter.b_out])
 grad_model = tf.gradients(class_loss, [model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
 
 #################### Build GAN Networks ############################
@@ -217,8 +224,8 @@ else:
 # Create training operations !
 if wasserstein:
     # train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(gan_class_loss, var_list=gen_vars)
-    train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-4).minimize(gen_loss, var_list=gen_vars)
-    train_disc = tf.train.RMSPropOptimizer(learning_rate=5e-4).minimize(disc_loss, var_list=disc_vars)
+    train_gen = tf.train.RMSPropOptimizer(learning_rate=learning_rate).minimize(gen_loss, var_list=gen_vars)
+    train_disc = tf.train.RMSPropOptimizer(learning_rate=learning_rate).minimize(disc_loss, var_list=disc_vars)
 else:
     train_gen = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(gen_loss, var_list=gen_vars)
     train_disc = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(disc_loss, var_list=disc_vars)
@@ -269,9 +276,9 @@ def plot_gan_image(name, epoch, sess):
         # Noise input.
         z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
         g = sess.run([gen_sample], feed_dict={gen_input: z, desired_label: d_label})
-        g = np.reshape(g, [gan_batch_size, 112, 92])
+        g = np.reshape(g, [gan_batch_size, xrow, xcol])
         g = g[0,:] #only pick one image
-        inverted_xs[i] = np.reshape(g, 112*92)
+        inverted_xs[i] = np.reshape(g, x_dim)
     
         # Make background black instead of grey
         # g = np.where(g<0,0, g)
@@ -299,7 +306,7 @@ def train(beta, model_l2, test, load_model):
         print("beta is %.4f, l2 coe is %.4f"%(beta, model_l2))
         model_loss = class_loss - beta * inv_loss + model_l2*tf.nn.l2_loss(model_weights)
     
-    model_optimizer = tf.train.AdamOptimizer(learning_rate).minimize(model_loss, var_list=[model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
+    model_optimizer = tf.train.AdamOptimizer(5e-5).minimize(class_loss, var_list=[model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
 
     # Initialize the variables (i.e. assign their default value)
     init = tf.global_variables_initializer()
@@ -315,12 +322,12 @@ def train(beta, model_l2, test, load_model):
 
             # Train the Classifier First
             if load_model:
-                saver.restore(sess, '/tmp/model.ckpt')
+                saver.restore(sess, '/tmp/face_model.ckpt')
                 print("Classifier Model restored.")
                 # test_acc, y_prediction = sess.run([accuracy, y_pred], feed_dict={x: orl_x_test, y: orl_y_test})
             else:
                 sess.run(iterator.initializer, feed_dict = {features: orl_x_train, labels: y_train_one_hot, batch_size: gan_batch_size, sample_size: 60000})
-                for i in range(10000):
+                for i in range(20000):
                     batch = sess.run(next_batch)
                     model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
                     # inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
@@ -332,7 +339,7 @@ def train(beta, model_l2, test, load_model):
                 test_acc, y_prediction = sess.run([accuracy, y_pred], feed_dict={x: orl_x_test, y: y_test_one_hot})
                 # test_acc, y_prediction = sess.run([accuracy, y_pred], feed_dict={x: letters_x_test, y: letters_y_test})
                 print("test acc:", test_acc)
-                save_path = saver.save(sess, '/tmp/model.ckpt')
+                save_path = saver.save(sess, '/tmp/face_model.ckpt')
                 print("Model saved in path: %s" % save_path)
 
             # Train Fredrickson MI
@@ -362,7 +369,7 @@ def train(beta, model_l2, test, load_model):
             # Train GAN
             # Initialize Aux dataset for GAN train
             sess.run(iterator.initializer, feed_dict = {features: aux_x_data, labels: aux_y_data, batch_size: gan_batch_size, sample_size: 40000})            
-            for i in range(80000):            
+            for i in range(120000):            
                 # Sample random noise 
                 batch = sess.run(next_batch)
                 z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
@@ -380,7 +387,7 @@ def train(beta, model_l2, test, load_model):
             inverted_xs = plot_gan_image('comparison/gan/gan_out',str(50000), sess)
             ssims = np.zeros(NUM_LABEL)
             for i in range(NUM_LABEL):
-                ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (112, 92)), np.reshape(inverted_xs[i], (112, 92)), data_range=1.0 - 0.0)
+                ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (xrow, xcol)), np.reshape(inverted_xs[i], (xrow, xcol)), data_range=1.0 - 0.0)
             dis = inverted_xs - avg_imgs
             l2_dis = np.linalg.norm(dis,ord=2,axis=1)
             avg_dis = np.mean(l2_dis)
@@ -397,7 +404,7 @@ if __name__ == '__main__':
     if test == 'other_people':
         betas = 0
         l2_coef = 0.0001
-        load_m = False
+        load_m = True
         aux_x_data = orl_x_aux
         aux_y_data = orl_y_train
         print("aux data size is ", aux_x_data.shape[0])
