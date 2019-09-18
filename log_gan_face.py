@@ -12,7 +12,6 @@ from snwgan import snw_Generator, snw_Discriminator
 from sklearn.datasets import fetch_olivetti_faces
 from sklearn.cluster import MiniBatchKMeans
 from sklearn import decomposition
-import re
 import os
 from os.path import join
 
@@ -43,67 +42,7 @@ GAMMA = 0.4
 LAMBDA = 0.2
 
 one_hot = lambda x, k: np.array(x[:,None] == np.arange(k)[None, :], dtype=int)
-
- 
 cur_path = os.getcwd()
-
-def read_pgm(filename, byteorder='>'):
-    """Return image data from a raw PGM file as numpy array.
-
-    Format specification: http://netpbm.sourceforge.net/doc/pgm.html
-
-    """
-    with open(filename, 'rb') as f:
-        buffer = f.read()
-    try:
-        header, width, height, maxval = re.search(
-            b"(^P5\s(?:\s*#.*[\r\n])*"
-            b"(\d+)\s(?:\s*#.*[\r\n])*"
-            b"(\d+)\s(?:\s*#.*[\r\n])*"
-            b"(\d+)\s(?:\s*#.*[\r\n]\s)*)", buffer).groups()
-    except AttributeError:
-        raise ValueError("Not a raw PGM file: '%s'" % filename)
-    return np.frombuffer(buffer,
-                            dtype='u1' if int(maxval) < 256 else byteorder+'u2',
-                            count=int(width)*int(height),
-                            offset=len(header)
-                            ).reshape((int(height), int(width)))
-    
-def load_ORL():  
-    print("Reading ORL faces database")
-    path = join(cur_path, 'data', 'att_faces', 's')
-    data = np.zeros((400, 112*92))
-    target = np.zeros(400)
-    
-    for subject in range(40):
-        for image in range(10):
-            im = read_pgm(join(path + str(subject + 1), str(image + 1) + ".pgm"))
-            data[10 * subject + image, :] = im.flatten()
-            target[10 * subject + image] = subject
-      
-    data = data/255
-    orl_x_model = data[:200, :]
-    orl_y_model = target[:200]
-#    orl_dataset = fetch_olivetti_faces(data_home='/Users/yanfu/Documents/ML_research/data/scikit_learn_data', shuffle=False, random_state=0, download_if_missing=True)
-#    orl_x_model = orl_dataset.data[:200, :]
-#    orl_y_model = orl_dataset.target[:200]
-#    
-    
-    #Shuffle dataset and get test and train
-    s = np.arange(orl_x_model.shape[0])
-    np.random.shuffle(s)
-    x = orl_x_model[s]
-    y = orl_y_model[s]
-    train_x = x[:160, :]
-    train_y = y[:160]
-    test_x = x[160:, :]
-    test_y = y[160:]
-    x_aux = data[200:, :]
-    y_aux = target[200:]
-    x_aux = x_aux[s]
-    y_aux = y_aux[s]
-    return train_x, train_y, test_x, test_y, x_aux, y_aux 
-
 ###################### Build Dataset #############################
 features = tf.placeholder(tf.float32, shape=[None, x_dim])
 labels = tf.placeholder(tf.float32, shape=[None, NUM_LABEL])
@@ -116,7 +55,6 @@ iterator = dataset.make_initializable_iterator()
 next_batch = iterator.get_next()
 
 #Loading data
-#face_x_train, face_x_test, face_y_train, face_y_test = data_segmentation('data/ORL_faces.npz', NUM_LABEL)
 orl_x_train, orl_y_train, orl_x_test, orl_y_test, orl_x_aux, orl_y_aux = load_ORL()
 
 # print('training dataset size:', orl_size)
@@ -200,22 +138,9 @@ gen_weights = tf.concat([tf.reshape(G.linear_w1,[1, -1]), tf.reshape(G.linear_b1
 similarity = tf.reduce_sum(tf.multiply(aux_label, desired_label), 1, keepdims=True )
 gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=desired_label, logits=gen_label)) + 0.001 * tf.nn.l2_loss(gen_weights) #0.01, only need when no auxiliary
 
-# Build wasserstein Loss
-def wgan_grad_pen(batch_size,x,label, G_sample):    
-    lam = 1   
-
-    eps = tf.random_uniform([batch_size,1], minval=0.0,maxval=1.0)
-    x_h = eps*x+(1-eps)*G_sample
-    # with tf.variable_scope("", reuse=True) as scope:
-    grad_d_x_h = tf.gradients(D(x_h, label), x_h)    
-    grad_norm = tf.norm(grad_d_x_h[0], axis=1, ord='euclidean')
-    grad_pen = tf.reduce_mean(tf.square(grad_norm-1))
-  
-    return lam*grad_pen
-
 if wasserstein:
     gen_loss = -tf.reduce_mean(similarity*disc_fake) + GAN_CLASS_COE*gan_class_loss
-    disc_loss = -tf.reduce_mean(disc_real) + tf.reduce_mean(disc_fake) #+ wgan_grad_pen(gan_batch_size,aux_x, aux_label, gen_sample)
+    disc_loss = -tf.reduce_mean(disc_real) + tf.reduce_mean(disc_fake)
     clip_D = [p.assign(tf.clip_by_value(p, -0.0001, 0.0001)) for p in disc_vars] #0.01!
 else:  
     gen_loss = -tf.reduce_mean(similarity*tf.log(tf.maximum(0.00001, disc_fake))) + GAN_CLASS_COE*gan_class_loss
@@ -404,7 +329,7 @@ if __name__ == '__main__':
     if test == 'other_people':
         betas = 0
         l2_coef = 0.0001
-        load_m = True
+        load_m = False
         aux_x_data = orl_x_aux
         aux_y_data = orl_y_train
         print("aux data size is ", aux_x_data.shape[0])
