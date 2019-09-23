@@ -42,7 +42,7 @@ INV_HIDDEN = 100
 beta = 0 #1, 0.5
 model_l2 = 0 #0.0001 
 wasserstein = True
-cnn_gan = False
+cnn_gan = True
 
 #Fredrickson Params
 ALPHA = 100000
@@ -138,24 +138,32 @@ if cnn_gan:
     gen_sample = tf.reshape(gen_sample_unflat,[gan_batch_size, x_dim])
     gen_vars = [G.linear_w, G.linear_b, G.deconv_w1, G.deconv_w2, G.deconv_w3]
     gen_weights = tf.concat([tf.reshape(G.linear_w, [1, -1]), tf.reshape(G.linear_b, [1, -1]), tf.reshape(G.deconv_w1, [1, -1]), tf.reshape(G.deconv_w2, [1, -1]), tf.reshape(G.deconv_w3, [1, -1])], 1)
+    gen_label = model(gen_sample)
+
+    # Build 2 D Networks (one from noise input, one from generated samples)
+    aux_x_unflat = tf.reshape(aux_x, [gan_batch_size, 28, 28, 1])
+    D = snw_Discriminator(NUM_LABEL) 
+    disc_real = D(aux_x_unflat, aux_label)
+    disc_fake = D(gen_sample_unflat, gen_label)
+
+    # D Network Variables
+    disc_vars = [D.linear_w1, D.linear_b1, D.linear_w2, D.conv_w1, D.conv_w2, D.conv_w3, D.conv_w4, D.conv_w5]
+
 else:
     G = Generator(noise_dim, NUM_LABEL, x_dim, gan_batch_size)
     gen_sample = G(gen_input,desired_label)
     # G Network Variables
     gen_vars = [G.linear_w1, G.linear_b1, G.linear_w2, G.linear_b2, G.linear_w3, G.linear_b3]
     gen_weights = tf.concat([tf.reshape(G.linear_w1,[1, -1]), tf.reshape(G.linear_b1,[1, -1]), tf.reshape(G.linear_w2,[1, -1]), tf.reshape(G.linear_b2,[1, -1]), tf.reshape(G.linear_w3,[1, -1]), tf.reshape(G.linear_b3,[1, -1])], 1)
+    gen_label = model(gen_sample)
 
-gen_label = model(gen_sample)
+    # Build 2 D Networks (one from noise input, one from generated samples)
+    D = Disciminator(NUM_LABEL, x_dim, wasserstein) 
+    disc_real = D(aux_x, aux_label)
+    disc_fake = D(gen_sample, gen_label)
 
-# Build 2 D Networks (one from noise input, one from generated samples)
-D = Disciminator(NUM_LABEL, x_dim, wasserstein) 
-disc_real = D(aux_x, aux_label)
-disc_fake = D(gen_sample, gen_label)
-
-# D Network Variables
-disc_vars = [D.linear_w1, D.linear_b1, D.linear_w2, D.linear_b2]
-
-# dis_weights = tf.concat([tf.reshape(D.linear_w1, [1,-1]), tf.reshape(D.linear_b1, [1,-1]), tf.reshape(D.linear_w2, [1,-1]), tf.reshape(D.linear_b2, [1,-1])], 1)
+    # D Network Variables
+    disc_vars = [D.linear_w1, D.linear_b1, D.linear_w2, D.linear_b2]
 
 # Build Loss
 similarity = tf.reduce_sum(tf.multiply(aux_label, desired_label), 1, keepdims=True )
@@ -179,19 +187,14 @@ if wasserstein:
     # gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights)
     disc_loss = -tf.reduce_mean(disc_real) + tf.reduce_mean(disc_fake) #+ wgan_grad_pen(gan_batch_size,aux_x, aux_label, gen_sample)
     clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in disc_vars] #0.01!
+    train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(gen_loss, var_list=gen_vars)
+    train_disc = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(disc_loss, var_list=disc_vars)
 else:  
     gen_loss = -tf.reduce_mean(similarity*tf.log(tf.maximum(0.00001, disc_fake))) + GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
     disc_loss = -tf.reduce_mean(tf.log(tf.maximum(0.0000001, disc_real)) + tf.log(tf.maximum(0.0000001, 1. - disc_fake))) 
-
-# Create training operations !
-if wasserstein:
-    # train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(gan_class_loss, var_list=gen_vars)
-    train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(gen_loss, var_list=gen_vars)
-    train_disc = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(disc_loss, var_list=disc_vars)
-else:
     train_gen = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(gen_loss, var_list=gen_vars)
     train_disc = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(disc_loss, var_list=disc_vars)
-
+    
 ################### Build The NN Attacker ####################
 # target_y = tf.placeholder(tf.float32, shape=[None, NUM_LABEL])
 # aux_avai = 0
