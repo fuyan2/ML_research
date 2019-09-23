@@ -42,7 +42,8 @@ INV_HIDDEN = 100
 beta = 0 #1, 0.5
 model_l2 = 0 #0.0001 
 wasserstein = True
-# cnn_gan = False
+cnn_gan = False
+
 #Fredrickson Params
 ALPHA = 100000
 BETA = 5
@@ -52,171 +53,198 @@ input_desired_label = 1
 
 one_hot = lambda x, k: np.array(x[:,None] == np.arange(k)[None, :], dtype=int)
 
-# A custom initialization (see Xavier Glorot init)
-def glorot_init(shape):
-    return tf.random_normal(shape=shape, stddev=1. / tf.sqrt(shape[0] / 2.), dtype=tf.float32)
+###################### Build Dataset #############################
+features = tf.placeholder(tf.float32, shape=[None, x_dim])
+labels = tf.placeholder(tf.float32, shape=[None, NUM_LABEL])
+batch_size = tf.placeholder(tf.int64)
+sample_size = tf.placeholder(tf.int64)
+dataset = tf.data.Dataset.from_tensor_slices((features, labels))
+dataset = dataset.shuffle(sample_size, reshuffle_each_iteration=True)
+dataset = dataset.batch(batch_size, drop_remainder=True).repeat()
+iterator = dataset.make_initializable_iterator()
+next_batch = iterator.get_next()
 
-# Linear Regression 
-class NN_attacker(object):
-    def __init__(self, NUM_LABEL):
-        self.linear_w1 = tf.Variable(glorot_init([NUM_LABEL, 500]),name='glw1')
-        self.linear_b1 = tf.Variable(tf.zeros([500]),name='glb1')
-        self.linear_w2 = tf.Variable(glorot_init([500, 50]),name='glw2')
-        self.linear_b2 = tf.Variable(tf.zeros([50]),name='glb2')
-        self.linear_w3 = tf.Variable(glorot_init([50, x_dim]),name='glw3')
-        self.linear_b3 = tf.Variable(tf.zeros([x_dim]),name='glb3')
+#Loading data
+digits_size, digits_x_train, digits_y_train, digits_x_test, digits_y_test = load_mnist('digits')
+letters_size, letters_x_train, letters_y_train, letters_x_test, letters_y_test = load_mnist('letters')
 
-    def __call__(self, y):
-        linear_z1 = tf.nn.leaky_relu(tf.matmul(y,self.linear_w1) + self.linear_b1)
-        linear_z2 = tf.nn.leaky_relu(tf.matmul(linear_z1,self.linear_w2) + self.linear_b2)
-        out_layer = tf.matmul(linear_z2,self.linear_w3)+self.linear_b3
-        return out_layer
+reduce_train = False
+sep_point = 60000 # 50%, 25%
+if reduce_train:
+    digits_y_train = digits_y_train[:sep_point]
+    digits_x_train = digits_x_train[:sep_point, :]
 
-class NN_aux_attacker(object):
-    def __init__(self, NUM_LABEL):
-        self.linear_w1 = tf.Variable(glorot_init([NUM_LABEL+x_dim, 500]),name='glw1')
-        self.linear_b1 = tf.Variable(tf.zeros([500]),name='glb1')
-        self.linear_w2 = tf.Variable(glorot_init([500, 50]),name='glw2')
-        self.linear_b2 = tf.Variable(tf.zeros([50]),name='glb2')
-        self.linear_w3 = tf.Variable(glorot_init([50, x_dim]),name='glw3')
-        self.linear_b3 = tf.Variable(tf.zeros([x_dim]),name='glb3')
+# print('training dataset size:', digits_size)
+avg_imgs = average_images(NUM_LABEL, x_dim, digits_x_train, digits_y_train)
+avg_imgs = np.where(avg_imgs<0,0, avg_imgs)
+avg_imgs = np.where(avg_imgs>1, 1, avg_imgs)
 
-    def __call__(self, y, x):
-        x_y = tf.concat((x,y),1)
-        linear_z1 = tf.nn.leaky_relu(tf.matmul(x_y,self.linear_w1) + self.linear_b1)
-        linear_z2 = tf.nn.leaky_relu(tf.matmul(linear_z1,self.linear_w2) + self.linear_b2)
-        out_layer = tf.matmul(linear_z2,self.linear_w3)+self.linear_b3
-        return out_layer
+avg_digit_img = np.mean(digits_x_train, axis=0)
 
-class Generator(object):
-    # G Parameters
-    def __init__(self, noise_dim, NUM_LABEL, batch_size):
-        self.batch_size = batch_size
-        self.linear_w1 = tf.Variable(glorot_init([noise_dim+NUM_LABEL, 500]),name='glw1')
-        self.linear_b1 = tf.Variable(tf.zeros([500]),name='glb1')
-        self.linear_w2 = tf.Variable(glorot_init([500, 50]),name='glw2')
-        self.linear_b2 = tf.Variable(tf.zeros([50]),name='glb2')
-        self.linear_w3 = tf.Variable(glorot_init([50, x_dim]),name='glw3')
-        self.linear_b3 = tf.Variable(tf.zeros([x_dim]),name='glb3')
+print('train data size is ', digits_x_train.shape[0])
+print('test data size is ', digits_x_test.shape[0])
+# print("aux data size is ", aux_x_data.shape[0])
+y_train_one_hot = one_hot(digits_y_train, 10)
+y_test_one_hot = one_hot(digits_y_test, 10)
+# digits_y_train = one_hot(digits_y_train, 10) #10!
+# digits_y_test = one_hot(digits_y_test, 10)
+# aux_y_data = one_hot(aux_y_data, 10)
+
+# letters_y_train = one_hot(letters_y_train, 26) #10!
+# letters_y_test = one_hot(letters_y_test, 26)
+# aux_y_data = one_hot(aux_y_data, 26)
+
+################### Build The Classifier ####################
+x = tf.placeholder(tf.float32, shape=[None, x_dim])
+y = tf.placeholder(tf.float32, shape=[None, NUM_LABEL])
+model = Classifier(NUM_LABEL, x_dim)
+y_ml = model(x)
+
+# Build Inverter Regularizer
+model_weights = tf.concat([tf.reshape(model.linear_w1,[1, -1]),tf.reshape(model.linear_b1,[1, -1])], 1) #, tf.reshape(model.linear_w2,[1, -1]), tf.reshape(model.linear_b2,[1, -1])], 1)
+weight_shape = int(model_weights.shape[1])
+inverter = Inverter_Regularizer(NUM_LABEL, x_dim, weight_shape, INV_HIDDEN)
+avg_digit_img_inv = tf.constant(avg_digit_img, dtype=tf.float32)
+avg_digit_img_inv_reshape = tf.reshape(avg_digit_img_inv,[1,x_dim])
+inv_x = inverter(y, model_weights, avg_digit_img_inv_reshape)
         
-        self.training = True
+# Calculate MODEL Loss
+inv_loss = tf.losses.mean_squared_error(labels=x, predictions=inv_x)
+class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y, logits=y_ml))
 
- # Build G Graph
-    def __call__(self, z,y):
-        z_y = tf.concat((z,y),1)
-        linear_z1 = tf.nn.leaky_relu(tf.matmul(z_y,self.linear_w1) + self.linear_b1)
-        linear_z2 = tf.nn.leaky_relu(tf.matmul(linear_z1,self.linear_w2) + self.linear_b2)
-        out_layer = tf.matmul(linear_z2,self.linear_w3)+self.linear_b3
-        return out_layer
+correct = tf.equal(tf.argmax(y_ml, 1), tf.argmax(y, 1))
+accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
-# Logistic Regression
-class Disciminator(object):
-    # D Parameters
-    def __init__(self):
-        self.linear_w1 = tf.Variable(glorot_init([x_dim + NUM_LABEL, 100]))
-        self.linear_b1 = tf.Variable(tf.zeros([100]))
-        self.linear_w2 = tf.Variable(glorot_init([100, 1]))
-        self.linear_b2 = tf.Variable(tf.zeros([1]))
+# Build Optimizer !Use model_loss
+inverter_optimizer = tf.train.AdamOptimizer(0.001).minimize(inv_loss, var_list=[inverter.w_model, inverter.w_label, inverter.w_out, inverter.b_in, inverter.b_out])
+grad_model = tf.gradients(class_loss, [model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
 
-        self.training = True
+#################### Build GAN Networks ############################
+# Network Inputs
+gen_input = tf.placeholder(tf.float32, shape=[None, noise_dim], name='input_noise')
+aux_x = tf.placeholder(tf.float32, shape=[None, x_dim])
+aux_label = model(aux_x)
+# aux_label = tf.one_hot(tf.argmax(aux_label, 1), NUM_LABEL) 
+if input_desired_label:
+    desired_label = tf.placeholder(tf.float32, shape=[None, NUM_LABEL])
+else:
+    desired_label = aux_label
 
-    # Build D Graph
-    def __call__(self, x, y):
-        x_y = tf.concat((x,y),1)
-        linear1 = tf.nn.relu(tf.matmul(x_y, self.linear_w1) + self.linear_b1)
-        out = tf.matmul(linear1, self.linear_w2) + self.linear_b2
-        if wasserstein:
-            return out
+# Build G Networks
+# Use CNN gan
+if cnn_gan:
+    G = snw_Generator(noise_dim, NUM_LABEL, gan_batch_size)
+    gen_sample_unflat = G(gen_input,desired_label)
+    gen_sample = tf.reshape(gen_sample_unflat,[gan_batch_size, x_dim])
+    gen_vars = [G.linear_w, G.linear_b, G.deconv_w1, G.deconv_w2, G.deconv_w3]
+    gen_weights = tf.concat([tf.reshape(G.linear_w, [1, -1]), tf.reshape(G.linear_b, [1, -1]), tf.reshape(G.deconv_w1, [1, -1]), tf.reshape(G.deconv_w2, [1, -1]), tf.reshape(G.deconv_w3, [1, -1])], 1)
+else:
+    G = Generator(noise_dim, NUM_LABEL, x_dim, gan_batch_size)
+    gen_sample = G(gen_input,desired_label)
+    # G Network Variables
+    gen_vars = [G.linear_w1, G.linear_b1, G.linear_w2, G.linear_b2, G.linear_w3, G.linear_b3]
+    gen_weights = tf.concat([tf.reshape(G.linear_w1,[1, -1]), tf.reshape(G.linear_b1,[1, -1]), tf.reshape(G.linear_w2,[1, -1]), tf.reshape(G.linear_b2,[1, -1]), tf.reshape(G.linear_w3,[1, -1]), tf.reshape(G.linear_b3,[1, -1])], 1)
+
+gen_label = model(gen_sample)
+
+# Build 2 D Networks (one from noise input, one from generated samples)
+D = Disciminator(NUM_LABEL, x_dim, wasserstein) 
+disc_real = D(aux_x, aux_label)
+disc_fake = D(gen_sample, gen_label)
+
+# D Network Variables
+disc_vars = [D.linear_w1, D.linear_b1, D.linear_w2, D.linear_b2]
+
+# dis_weights = tf.concat([tf.reshape(D.linear_w1, [1,-1]), tf.reshape(D.linear_b1, [1,-1]), tf.reshape(D.linear_w2, [1,-1]), tf.reshape(D.linear_b2, [1,-1])], 1)
+
+# Build Loss
+similarity = tf.reduce_sum(tf.multiply(aux_label, desired_label), 1, keepdims=True )
+gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=desired_label, logits=gen_label))
+
+# Build wasserstein Loss
+def wgan_grad_pen(batch_size,x,label, G_sample):    
+    lam = 1   
+
+    eps = tf.random_uniform([batch_size,1], minval=0.0,maxval=1.0)
+    x_h = eps*x+(1-eps)*G_sample
+    # with tf.variable_scope("", reuse=True) as scope:
+    grad_d_x_h = tf.gradients(D(x_h, label), x_h)    
+    grad_norm = tf.norm(grad_d_x_h[0], axis=1, ord='euclidean')
+    grad_pen = tf.reduce_mean(tf.square(grad_norm-1))
+  
+    return lam*grad_pen
+
+if wasserstein:
+    gen_loss = -tf.reduce_mean(similarity*disc_fake) + GAN_CLASS_COE*gan_class_loss + 1. * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
+    # gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights)
+    disc_loss = -tf.reduce_mean(disc_real) + tf.reduce_mean(disc_fake) #+ wgan_grad_pen(gan_batch_size,aux_x, aux_label, gen_sample)
+    clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in disc_vars] #0.01!
+else:  
+    gen_loss = -tf.reduce_mean(similarity*tf.log(tf.maximum(0.00001, disc_fake))) + GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
+    disc_loss = -tf.reduce_mean(tf.log(tf.maximum(0.0000001, disc_real)) + tf.log(tf.maximum(0.0000001, 1. - disc_fake))) 
+
+# Create training operations !
+if wasserstein:
+    # train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(gan_class_loss, var_list=gen_vars)
+    train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(gen_loss, var_list=gen_vars)
+    train_disc = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(disc_loss, var_list=disc_vars)
+else:
+    train_gen = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(gen_loss, var_list=gen_vars)
+    train_disc = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(disc_loss, var_list=disc_vars)
+
+################### Build The NN Attacker ####################
+# target_y = tf.placeholder(tf.float32, shape=[None, NUM_LABEL])
+# aux_avai = 0
+# if aux_avai:
+#     target_x = tf.placeholder(tf.float32, shape=[None, x_dim])
+#     nn_attac = NN_aux_attacker(NUM_LABEL)
+#     nn_x = nn_attac(target_y, target_x)
+# else:
+#     nn_attac = NN_attacker(NUM_LABEL)
+#     nn_x = nn_attac(target_y)
+
+# nn_y = model(nn_x)
+# nn_vars = [nn_attac.linear_w1, nn_attac.linear_b1, nn_attac.linear_w2, nn_attac.linear_b2, nn_attac.linear_w3, nn_attac.linear_b3]
+# nn_weights = tf.concat([tf.reshape(nn_attac.linear_w1,[1, -1]), tf.reshape(nn_attac.linear_b1,[1, -1]), tf.reshape(nn_attac.linear_w2,[1, -1]), tf.reshape(nn_attac.linear_b2,[1, -1]), tf.reshape(nn_attac.linear_w3,[1, -1]), tf.reshape(nn_attac.linear_b3,[1, -1])], 1)
+# nn_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=target_y, logits=nn_y)) + 0.01 * tf.nn.l2_loss(nn_weights)
+# train_nn = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(nn_loss, var_list=nn_vars)
+
+# Fredrickson Model Inversion Attack, Gradient Attack
+def fred_mi(i, y_conv, sess, iterate):
+    label_chosen = np.zeros(NUM_LABEL)
+    label_chosen[i] = 1
+    
+    cost_x = 1 - tf.squeeze(tf.gather(y_conv, i, axis=1), 0)
+    gradient_of_cost = tf.gradients(cost_x, x)
+    x_inv = x - tf.scalar_mul(LAMBDA, tf.squeeze(gradient_of_cost, 0))
+    # x_mi = np.zeros((1, x_dim))
+    x_mi = np.reshape(avg_digit_img,(1,x_dim))
+    previous_costs = [inf,inf,inf,inf,inf]
+
+    for i in range(ALPHA):
+        x_mi = sess.run(x_inv, feed_dict={x: x_mi, y: [label_chosen] })
+        cost_x_mi = sess.run(cost_x, feed_dict={x: x_mi, y: [label_chosen] })
+        max_cost = max(previous_costs)
+        
+        if(cost_x_mi > max_cost or (iterate and cost_x_mi == 0)):
+            print("Early break, no ALPHA HIT")
+            break;
         else:
-            return tf.sigmoid(out)
+            previous_costs.append(cost_x_mi)
+            previous_costs.pop(0)
 
-class Classifier(object):
-    def __init__(self):
-        self.linear_w1 = tf.Variable(glorot_init([x_dim, NUM_LABEL]))
-        self.linear_b1 = tf.Variable(tf.zeros([NUM_LABEL]))
-        # self.linear_w2 = tf.Variable(glorot_init([100, NUM_LABEL]))
-        # self.linear_b2 = tf.Variable(tf.zeros([NUM_LABEL]))
+        if(i % 5000 == 0):
+            print('step %d, current cost is %g' % (i, cost_x_mi))
 
-        self.training = True
+     # Make background black instead of grey
+    x_mi = np.where(x_mi<0,0, x_mi)
+    x_mi = np.where(x_mi>1, 1, x_mi)
 
-    # Build D Graph
-    def __call__(self, x):
-        # linear1 = tf.nn.relu(tf.matmul(x, self.linear_w1) + self.linear_b1)
-        # out = tf.nn.softmax(tf.matmul(linear1, self.linear_w2) + self.linear_b2)
-        out = tf.nn.softmax(tf.matmul(x, self.linear_w1) + self.linear_b1)
-        return out
-    
-def lrelu(x, alpha):
-    return tf.nn.relu(x) - alpha * tf.nn.relu(-x)
+    print('iteration hit:', i+1)
+    check_pred = sess.run(correct, feed_dict={x: x_mi, y: [label_chosen] })
+    print("Prediction for reconstructed image:", check_pred)
+    return x_mi
 
-class Inverter_Regularizer(object):
-    def __init__(self, weight_shape):
-        self.w_model =    tf.Variable(glorot_init([weight_shape, INV_HIDDEN]))
-        self.w_label = tf.Variable(glorot_init([NUM_LABEL, INV_HIDDEN]))
-        self.w_aux = tf.Variable(glorot_init([x_dim, INV_HIDDEN]))
-        self.w_out = tf.Variable(glorot_init([INV_HIDDEN, x_dim]))
-        self.b_in = tf.Variable(tf.zeros([INV_HIDDEN]))
-        self.b_out = tf.Variable(tf.zeros([x_dim]))
-        
-    def __call__(self, y, model_weights, aux):
-        # Input Layer
-        ww = tf.matmul(model_weights, self.w_model)
-        wy = tf.matmul(y, self.w_label)
-        wo = tf.matmul(aux, self.w_aux)
-        wh = tf.add(wy, ww)
-        wt = tf.add(wh,wo)
-        hidden_layer =    tf.add(wt, self.b_in)
-        rect = lrelu(hidden_layer, 0.3)
-        # Output Layer
-        out_layer = tf.add(tf.matmul(rect, self.w_out), self.b_out)
-        rect = lrelu(out_layer, 0.3)
-        return rect
-
-# Load MNIST data
-def mnist(type):
-    def parse_labels(filename):
-            with gzip.open(filename, 'rb') as fh:
-                    magic, num_data = struct.unpack(">II", fh.read(8))
-                    return np.array(array.array("B", fh.read()), dtype=np.uint8)
-
-    def parse_images(filename):
-            with gzip.open(filename, 'rb') as fh:
-                    magic, num_data, rows, cols = struct.unpack(">IIII", fh.read(16))
-                    return np.array(array.array("B", fh.read()), dtype=np.uint8).reshape(num_data, rows, cols)
-
-    train_images = parse_images('data/emnist-'+type+'-train-images-idx3-ubyte.gz')
-    train_labels = parse_labels('data/emnist-'+type+'-train-labels-idx1-ubyte.gz')
-    test_images    = parse_images('data/emnist-'+type+'-test-images-idx3-ubyte.gz')
-    test_labels    = parse_labels('data/emnist-'+type+'-test-labels-idx1-ubyte.gz')
-
-    return train_images, train_labels, test_images, test_labels
-
-def data_segmentation(data_path, CLASSES):
-  data = np.load(data_path)
-
-  trainX = data['trainX'] / 255
-  testX = data['testX'] / 255
-  trainY= data['trainY']
-  testY= data['testY']
-
-  trainY = np.eye(CLASSES)[trainY]
-  testY  = np.eye(CLASSES)[testY]
-
-  return trainX, testX, trainY, testY
-
-def load_mnist(type):
-    partial_flatten = lambda x : np.reshape(x, (x.shape[0], np.prod(x.shape[1:])))        
-    train_images, train_labels, test_images, test_labels = mnist(type)
-    train_images = partial_flatten(train_images) / 255.0
-    test_images    = partial_flatten(test_images)    / 255.0
-    N_data = train_images.shape[0]
-
-    return N_data, train_images, train_labels, test_images, test_labels
-
-# A custom initialization (see Xavier Glorot init)
-def glorot_init(shape):
-    return tf.random_normal(shape=shape, stddev=1. / tf.sqrt(shape[0] / 2.), dtype=tf.float32)
-    
 def plot_gan_image(name, epoch, sess):
     # Generate images from noise, using the generator network.
     fig, ax = plt.subplots(NUM_LABEL)
@@ -260,206 +288,6 @@ def plot_nn_image(name, epoch, sess):
 
     plt.savefig(name+epoch)
 
-def average_images(images, labels):
-    avg_imgs = np.zeros((NUM_LABEL, x_dim))
-    for i in range(NUM_LABEL):
-        imgs_for_label = images[labels == i, :]
-        avg_imgs[i] = np.mean(imgs_for_label, axis=0)
-
-    return avg_imgs 
-
-###################### Build Dataset #############################
-features = tf.placeholder(tf.float32, shape=[None, x_dim])
-labels = tf.placeholder(tf.float32, shape=[None, NUM_LABEL])
-batch_size = tf.placeholder(tf.int64)
-sample_size = tf.placeholder(tf.int64)
-dataset = tf.data.Dataset.from_tensor_slices((features, labels))
-dataset = dataset.shuffle(sample_size, reshuffle_each_iteration=True)
-dataset = dataset.batch(batch_size, drop_remainder=True).repeat()
-iterator = dataset.make_initializable_iterator()
-next_batch = iterator.get_next()
-
-#Loading data
-digits_size, digits_x_train, digits_y_train, digits_x_test, digits_y_test = load_mnist('digits')
-letters_size, letters_x_train, letters_y_train, letters_x_test, letters_y_test = load_mnist('letters')
-
-reduce_train = False
-sep_point = 60000 # 50%, 25%
-if reduce_train:
-    digits_y_train = digits_y_train[:sep_point]
-    digits_x_train = digits_x_train[:sep_point, :]
-
-# print('training dataset size:', digits_size)
-avg_imgs = average_images(digits_x_train, digits_y_train)
-avg_imgs = np.where(avg_imgs<0,0, avg_imgs)
-avg_imgs = np.where(avg_imgs>1, 1, avg_imgs)
-
-avg_digit_img = np.mean(digits_x_train, axis=0)
-
-print('train data size is ', digits_x_train.shape[0])
-print('test data size is ', digits_x_test.shape[0])
-# print("aux data size is ", aux_x_data.shape[0])
-y_train_one_hot = one_hot(digits_y_train, 10)
-y_test_one_hot = one_hot(digits_y_test, 10)
-# digits_y_train = one_hot(digits_y_train, 10) #10!
-# digits_y_test = one_hot(digits_y_test, 10)
-# aux_y_data = one_hot(aux_y_data, 10)
-
-# letters_y_train = one_hot(letters_y_train, 26) #10!
-# letters_y_test = one_hot(letters_y_test, 26)
-# aux_y_data = one_hot(aux_y_data, 26)
-
-################### Build The Classifier ####################
-x = tf.placeholder(tf.float32, shape=[None, x_dim])
-y = tf.placeholder(tf.float32, shape=[None, NUM_LABEL])
-model = Classifier()
-y_ml = model(x)
-
-# Build Inverter Regularizer
-model_weights = tf.concat([tf.reshape(model.linear_w1,[1, -1]),tf.reshape(model.linear_b1,[1, -1])], 1) #, tf.reshape(model.linear_w2,[1, -1]), tf.reshape(model.linear_b2,[1, -1])], 1)
-weight_shape = int(model_weights.shape[1])
-inverter = Inverter_Regularizer(weight_shape)
-avg_digit_img_inv = tf.constant(avg_digit_img, dtype=tf.float32)
-avg_digit_img_inv_reshape = tf.reshape(avg_digit_img_inv,[1,x_dim])
-inv_x = inverter(y, model_weights, avg_digit_img_inv_reshape)
-        
-# Calculate MODEL Loss
-inv_loss = tf.losses.mean_squared_error(labels=x, predictions=inv_x)
-class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y, logits=y_ml))
-
-correct = tf.equal(tf.argmax(y_ml, 1), tf.argmax(y, 1))
-accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
-
-# Build Optimizer !Use model_loss
-inverter_optimizer = tf.train.AdamOptimizer(0.001).minimize(inv_loss, var_list=[inverter.w_model, inverter.w_label, inverter.w_out, inverter.b_in, inverter.b_out])
-grad_model = tf.gradients(class_loss, [model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
-
-#################### Build GAN Networks ############################
-# Network Inputs
-gen_input = tf.placeholder(tf.float32, shape=[None, noise_dim], name='input_noise')
-aux_x = tf.placeholder(tf.float32, shape=[None, x_dim])
-aux_label = model(aux_x)
-# aux_label = tf.one_hot(tf.argmax(aux_label, 1), NUM_LABEL) 
-if input_desired_label:
-    desired_label = tf.placeholder(tf.float32, shape=[None, NUM_LABEL])
-else:
-    desired_label = aux_label
-
-# Build G Networks
-# Use CNN gan
-cnn_gan = True
-if cnn_gan:
-    G = snw_Generator(noise_dim, NUM_LABEL, gan_batch_size)
-    gen_sample_unflat = G(gen_input,desired_label)
-    gen_sample = tf.reshape(gen_sample_unflat,[gan_batch_size, x_dim])
-    gen_vars = [G.linear_w, G.linear_b, G.deconv_w1, G.deconv_w2, G.deconv_w3]
-    gen_weights = tf.concat([tf.reshape(G.linear_w, [1, -1]), tf.reshape(G.linear_b, [1, -1]), tf.reshape(G.deconv_w1, [1, -1]), tf.reshape(G.deconv_w2, [1, -1]), tf.reshape(G.deconv_w3, [1, -1])], 1)
-else:
-    G = Generator(noise_dim, NUM_LABEL, gan_batch_size)
-    gen_sample = G(gen_input,desired_label)
-    # G Network Variables
-    gen_vars = [G.linear_w1, G.linear_b1, G.linear_w2, G.linear_b2, G.linear_w3, G.linear_b3]
-    gen_weights = tf.concat([tf.reshape(G.linear_w1,[1, -1]), tf.reshape(G.linear_b1,[1, -1]), tf.reshape(G.linear_w2,[1, -1]), tf.reshape(G.linear_b2,[1, -1]), tf.reshape(G.linear_w3,[1, -1]), tf.reshape(G.linear_b3,[1, -1])], 1)
-
-gen_label = model(gen_sample)
-
-# Build 2 D Networks (one from noise input, one from generated samples)
-D = Disciminator() 
-disc_real = D(aux_x, aux_label)
-disc_fake = D(gen_sample, gen_label)
-
-# D Network Variables
-disc_vars = [D.linear_w1, D.linear_b1, D.linear_w2, D.linear_b2]
-
-# dis_weights = tf.concat([tf.reshape(D.linear_w1, [1,-1]), tf.reshape(D.linear_b1, [1,-1]), tf.reshape(D.linear_w2, [1,-1]), tf.reshape(D.linear_b2, [1,-1])], 1)
-
-# Build Loss
-similarity = tf.reduce_sum(tf.multiply(aux_label, desired_label), 1, keepdims=True )
-gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=desired_label, logits=gen_label)) + 0.01 * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
-
-# Build wasserstein Loss
-def wgan_grad_pen(batch_size,x,label, G_sample):    
-    lam = 1   
-
-    eps = tf.random_uniform([batch_size,1], minval=0.0,maxval=1.0)
-    x_h = eps*x+(1-eps)*G_sample
-    # with tf.variable_scope("", reuse=True) as scope:
-    grad_d_x_h = tf.gradients(D(x_h, label), x_h)    
-    grad_norm = tf.norm(grad_d_x_h[0], axis=1, ord='euclidean')
-    grad_pen = tf.reduce_mean(tf.square(grad_norm-1))
-  
-    return lam*grad_pen
-
-if wasserstein:
-    gen_loss = -tf.reduce_mean(similarity*disc_fake) + GAN_CLASS_COE*gan_class_loss
-    disc_loss = -tf.reduce_mean(disc_real) + tf.reduce_mean(disc_fake) #+ wgan_grad_pen(gan_batch_size,aux_x, aux_label, gen_sample)
-    clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in disc_vars] #0.01!
-else:  
-    gen_loss = -tf.reduce_mean(similarity*tf.log(tf.maximum(0.00001, disc_fake))) + GAN_CLASS_COE*gan_class_loss
-    disc_loss = -tf.reduce_mean(tf.log(tf.maximum(0.0000001, disc_real)) + tf.log(tf.maximum(0.0000001, 1. - disc_fake))) 
-
-# Create training operations !
-if wasserstein:
-    # train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(gan_class_loss, var_list=gen_vars)
-    train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(gen_loss, var_list=gen_vars)
-    train_disc = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(disc_loss, var_list=disc_vars)
-else:
-    train_gen = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(gen_loss, var_list=gen_vars)
-    train_disc = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(disc_loss, var_list=disc_vars)
-
-################### Build The NN Attacker ####################
-target_y = tf.placeholder(tf.float32, shape=[None, NUM_LABEL])
-aux_avai = 0
-if aux_avai:
-    target_x = tf.placeholder(tf.float32, shape=[None, x_dim])
-    nn_attac = NN_aux_attacker(NUM_LABEL)
-    nn_x = nn_attac(target_y, target_x)
-else:
-    nn_attac = NN_attacker(NUM_LABEL)
-    nn_x = nn_attac(target_y)
-
-nn_y = model(nn_x)
-nn_vars = [nn_attac.linear_w1, nn_attac.linear_b1, nn_attac.linear_w2, nn_attac.linear_b2, nn_attac.linear_w3, nn_attac.linear_b3]
-nn_weights = tf.concat([tf.reshape(nn_attac.linear_w1,[1, -1]), tf.reshape(nn_attac.linear_b1,[1, -1]), tf.reshape(nn_attac.linear_w2,[1, -1]), tf.reshape(nn_attac.linear_b2,[1, -1]), tf.reshape(nn_attac.linear_w3,[1, -1]), tf.reshape(nn_attac.linear_b3,[1, -1])], 1)
-nn_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=target_y, logits=nn_y)) + 0.01 * tf.nn.l2_loss(nn_weights)
-train_nn = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(nn_loss, var_list=nn_vars)
-
-# Fredrickson Model Inversion Attack, Gradient Attack
-def fred_mi(i, y_conv, sess, iterate):
-    label_chosen = np.zeros(NUM_LABEL)
-    label_chosen[i] = 1
-    
-    cost_x = 1 - tf.squeeze(tf.gather(y_conv, i, axis=1), 0)
-    gradient_of_cost = tf.gradients(cost_x, x)
-    x_inv = x - tf.scalar_mul(LAMBDA, tf.squeeze(gradient_of_cost, 0))
-    # x_mi = np.zeros((1, x_dim))
-    x_mi = np.reshape(avg_digit_img,(1,x_dim))
-    previous_costs = [inf,inf,inf,inf,inf]
-
-    for i in range(ALPHA):
-        x_mi = sess.run(x_inv, feed_dict={x: x_mi, y: [label_chosen] })
-        cost_x_mi = sess.run(cost_x, feed_dict={x: x_mi, y: [label_chosen] })
-        max_cost = max(previous_costs)
-        
-        if(cost_x_mi > max_cost or (iterate and cost_x_mi == 0)):
-            print("Early break, no ALPHA HIT")
-            break;
-        else:
-            previous_costs.append(cost_x_mi)
-            previous_costs.pop(0)
-
-        if(i % 5000 == 0):
-            print('step %d, current cost is %g' % (i, cost_x_mi))
-
-     # Make background black instead of grey
-    x_mi = np.where(x_mi<0,0, x_mi)
-    x_mi = np.where(x_mi>1, 1, x_mi)
-
-    print('iteration hit:', i+1)
-    check_pred = sess.run(correct, feed_dict={x: x_mi, y: [label_chosen] })
-    print("Prediction for reconstructed image:", check_pred)
-    return x_mi
-
 # beta = 0
 # model_l2 = 0.001
 # model_loss = class_loss - beta * inv_loss + model_l2*tf.nn.l2_loss(model_weights)    
@@ -489,25 +317,25 @@ def train(beta, model_l2, test, load_model):
 
 
             # Train the Classifier First
-            # if load_model:
-            #     saver.restore(sess, '/tmp/model.ckpt')
-            #     print("Classifier Model restored.")
-            #     # test_acc = sess.run([accuracy], feed_dict={x: digits_x_test, y: digits_y_test})
-            # else:
-            sess.run(iterator.initializer, feed_dict = {features: digits_x_train, labels: y_train_one_hot, batch_size: gan_batch_size, sample_size: 60000})
-            for i in range(20000):
-                batch = sess.run(next_batch)
-                model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
-                inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
-                if i % 1000 == 0:
-                    gradients, train_accuracy = sess.run([grad_model, accuracy], feed_dict={x: batch[0], y: batch[1] })
-#                     print('gradients: ', gradients)
-                    print('Epoch %d, training accuracy %g' % (i, train_accuracy))        
+            if load_model:
+                saver.restore(sess, 'tmp/mnist_model.ckpt')
+                print("Classifier Model restored.")
+                # test_acc = sess.run([accuracy], feed_dict={x: digits_x_test, y: digits_y_test})
+            else:
+                sess.run(iterator.initializer, feed_dict = {features: digits_x_train, labels: y_train_one_hot, batch_size: gan_batch_size, sample_size: 60000})
+                for i in range(10000):
+                    batch = sess.run(next_batch)
+                    model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
+                    inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
+                    if i % 1000 == 0:
+                        train_accuracy = sess.run(accuracy, feed_dict={x: batch[0], y: batch[1] })
+                        test_accuracy = sess.run(accuracy, feed_dict={x: digits_x_test, y: y_test_one_hot })
+                        print('Epoch %d, training accuracy %g, test accuracy %g' % (i, train_accuracy, test_accuracy))       
 
-            test_acc = sess.run(accuracy, feed_dict={x: digits_x_test, y: y_test_one_hot})
-            print("test acc:", test_acc)
-            save_path = saver.save(sess, '/tmp/model.ckpt')
-            print("Model saved in path: %s" % save_path)
+                test_acc = sess.run(accuracy, feed_dict={x: digits_x_test, y: y_test_one_hot})
+                print("test acc:", test_acc)
+                save_path = saver.save(sess, 'tmp/mnist_model.ckpt')
+                print("Model saved in path: %s" % save_path)
 
             # Train Fredrickson MI
             # fig, ax = plt.subplots(6,5)
@@ -582,7 +410,7 @@ def train(beta, model_l2, test, load_model):
             #         plot_nn_image('comparison/nn/nn_out',str(i), sess)
 
 if __name__ == '__main__':
-    test = 'avg_img'
+    test = 'beta'
     
     if test == 'l1': 
         # beta = 0
@@ -707,6 +535,7 @@ if __name__ == '__main__':
         print("aux data size is ", aux_x_data.shape[0])
         aux_y_data = one_hot(digits_y_train, 10)
         aux_y_data = aux_y_data[:aux_x_data.shape[0], :]
+       
         distances, ssims = train(betas, l2_coef, test, load_m)
 
     elif test == 'avg_img':
@@ -732,26 +561,29 @@ if __name__ == '__main__':
         betas = [0, 5, 10, 20, 30, 40, 60, 80, 100]
         l2_coef = 0.0001
         # Use letters as aux
-        # load_m = False
-        # aux_x_data = letters_x_train
+        load_m = False
+        aux_x_data = letters_x_train
         # aux_y_data = digits_y_train
         # print("aux data size is ", aux_x_data.shape[0])
         # aux_y_data = one_hot(digits_y_train, 10)
         # aux_y_data = aux_y_data[:aux_x_data.shape[0], :]
         
-        # # aux_x_data = np.repeat(np.reshape(avg_digit_img,[1,x_dim]),digits_y_train.shape[0], axis=0)
-        # # aux_y_data = digits_y_train
-        # # aux_y_data = one_hot(digits_y_train, 10)
+        # aux_x_data = np.repeat(np.reshape(avg_digit_img,[1,x_dim]),digits_y_train.shape[0], axis=0)
+        # aux_y_data = digits_y_train
+        # aux_y_data = one_hot(digits_y_train, 10)
 
-        # distances = np.zeros(len(betas))
-        # ssims = np.zeros(len(betas))
-        # i = 0
-        # for beta in betas:
-        #     distances[i], acc[i], ssims[i] = train(beta, l2_coef, test+str(beta), load_m)    
-        #     i += 1
-        # np.save('comparison/temp/beta_dis', distances)
-        # np.save('comparison/temp/beta_acc', acc)
-        # np.save('comparison/temp/beta_ssim', ssims)
+        aux_y_data = np.zeros((aux_x_data.shape[0], NUM_LABEL))
+        aux_y_data[:, 3] = 1
+
+        distances = np.zeros(len(betas))
+        ssims = np.zeros(len(betas))
+        i = 0
+        for beta in betas:
+            distances[i], acc[i], ssims[i] = train(beta, l2_coef, test+str(beta), load_m)    
+            i += 1
+        np.save('comparison/temp/beta_dis', distances)
+        np.save('comparison/temp/beta_acc', acc)
+        np.save('comparison/temp/beta_ssim', ssims)
         distances = np.load('comparison/temp/beta_dis.npy')
         acc = np.load('comparison/temp/beta_acc.npy')
         ssims = np.load('comparison/temp/beta_ssim.npy')
@@ -759,12 +591,12 @@ if __name__ == '__main__':
         plt.plot(betas, distances)
         plt.xlabel('model beta coefficient')
         plt.ylabel('sq distance between mi and avg')
-        plt.savefig('comparison/beta_vs_sq_dis_aiden_avgimg_against_gan_letters')
+        plt.savefig('comparison/beta_vs_sq_dis_aiden_avgimg_against_gan_letters3')
         plt.close()
         plt.plot(betas, acc)
         plt.xlabel('model beta coefficient')
         plt.ylabel('accuracy')
-        plt.savefig('comparison/beta_vs_accuracy_aiden_avgimg_against_gan_letters')
+        plt.savefig('comparison/beta_vs_accuracy_aiden_avgimg_against_gan_letters3')
         plt.close()
         plt.plot(betas, ssims)
         plt.xlabel('model beta coefficient')
