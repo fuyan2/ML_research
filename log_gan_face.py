@@ -26,7 +26,7 @@ learning_rate = 5e-4 #0.00002
 xrow = 112
 xcol = 92
 x_dim = 112*92 #112*92 #10304
-noise_dim = 164 #20
+noise_dim = 500 #20
 NUM_LABEL = 20 #10
 GAN_CLASS_COE = 100 #10
 gan_batch_size = 40
@@ -84,7 +84,7 @@ y_ml = model(x)
 model_weights = tf.concat([tf.reshape(model.linear_w1,[1, -1]),tf.reshape(model.linear_b1,[1, -1])], 1) #, tf.reshape(model.linear_w2,[1, -1]), tf.reshape(model.linear_b2,[1, -1])], 1)
 weight_shape = int(model_weights.shape[1])
 inverter = Inverter_Regularizer(NUM_LABEL, x_dim, weight_shape, INV_HIDDEN)
-inv_x = inverter(y, model_weights)
+inv_x = inverter(y, model_weights, None)
         
 # Calculate MODEL Loss
 inv_loss = tf.losses.mean_squared_error(labels=x, predictions=inv_x)
