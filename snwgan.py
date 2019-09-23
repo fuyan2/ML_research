@@ -49,13 +49,13 @@ class snw_Generator:
     xw2_norm = tf.layers.batch_normalization(deconv_xw2, training=self.training)
     deconv_h2 = tf.nn.leaky_relu(xw2_norm)
     deconv_xw3 = tf.nn.conv2d_transpose(deconv_h2, self.deconv_w3,output_shape=[self.batch_size,28,28,1], strides=[1, 1, 1, 1])
-    out_layer = tf.nn.sigmoid(deconv_xw3)
+    # out_layer = tf.nn.sigmoid(deconv_xw3)
     # out_layer = tf.nn.tanh(deconv_xw3)
-    return out_layer
+    return deconv_xw3
 
 class snw_Discriminator:
   # Discriminator Parameters
-  def __init__(self):
+  def __init__(self, NUM_LABEL):
     self.conv_w1 = tf.get_variable('dw1', shape=[3, 3, 1, 64])
     self.conv_w2 = tf.get_variable('dw2', shape=[4, 4, 64, 128])
     self.conv_w3 = tf.get_variable('dw3', shape=[3, 3, 128, 128])
@@ -68,15 +68,14 @@ class snw_Discriminator:
     # self.conv_b4 = tf.Variable(tf.constant(0.1, shape=[256]), name='db4') 
     # self.conv_b5 = tf.Variable(tf.constant(0.1, shape=[256]), name='db5') 
 
-    self.linear_w1 = tf.Variable(glorot_init([7*7*256, 300]))
+    self.linear_w1 = tf.Variable(glorot_init([7*7*256+NUM_LABEL, 300]))
     self.linear_b1 = tf.Variable(glorot_init([300]))
     self.linear_w2 = tf.Variable(glorot_init([300, 1]))
-    self.linear_b2 = tf.Variable(glorot_init([1]))
 
     self.training = True
 
   # Build Discriminator Graph
-  def __call__(self, x):
+  def __call__(self, x, label):
     conv_xw1 = tf.nn.conv2d(x,spectral_normed_weight(self.conv_w1, num_iters=1, update_collection=SPECTRAL_NORM_UPDATE_OPS),strides=[1, 1, 1, 1], padding='SAME')
     xw1_norm = tf.layers.batch_normalization(conv_xw1, training=self.training)
     conv_h1 = tf.nn.leaky_relu(xw1_norm)
@@ -93,10 +92,11 @@ class snw_Discriminator:
     xw5_norm = tf.layers.batch_normalization(conv_xw5, training=self.training)
     conv_h5 = tf.nn.leaky_relu(xw5_norm)
     conv_h5_flat = tf.reshape(conv_h5, [-1, 7*7*256])
-    linear1 = tf.matmul(conv_h5_flat, spectral_normed_weight(self.linear_w1, num_iters=1, update_collection=SPECTRAL_NORM_UPDATE_OPS)) + self.linear_b1
+    x_y = tf.concat((conv_h5_flat,label),1)
+    linear1 = tf.matmul(x_y, spectral_normed_weight(self.linear_w1, num_iters=1, update_collection=SPECTRAL_NORM_UPDATE_OPS)) + self.linear_b1
     linear1 = tf.nn.leaky_relu(linear1)
 
-    out = tf.matmul(linear1, spectral_normed_weight(self.linear_w2, num_iters=1, update_collection=SPECTRAL_NORM_UPDATE_OPS)) + self.linear_b2
+    out = tf.matmul(linear1, spectral_normed_weight(self.linear_w2, num_iters=1, update_collection=SPECTRAL_NORM_UPDATE_OPS))
     #! out = tf.sigmoid(out)
     return out
 
