@@ -40,14 +40,12 @@ class Generator(object):
     # G Parameters
     def __init__(self, noise_dim, NUM_LABEL, x_dim, batch_size):
         self.batch_size = batch_size
-        self.linear_w1 = tf.Variable(glorot_init([noise_dim+NUM_LABEL, 1000]),name='glw1') #500
-        self.linear_b1 = tf.Variable(tf.zeros([1000]),name='glb1')
-        self.linear_w2 = tf.Variable(glorot_init([1000, 200]),name='glw2') #50
-        self.linear_b2 = tf.Variable(tf.zeros([200]),name='glb2')
-        self.linear_w3 = tf.Variable(glorot_init([200, x_dim]),name='glw3')
+        self.linear_w1 = tf.Variable(glorot_init([noise_dim+NUM_LABEL, 500]),name='glw1') #500, 1000
+        self.linear_b1 = tf.Variable(tf.zeros([500]),name='glb1')
+        self.linear_w2 = tf.Variable(glorot_init([500, 50]),name='glw2') #50, 200
+        self.linear_b2 = tf.Variable(tf.zeros([50]),name='glb2')
+        self.linear_w3 = tf.Variable(glorot_init([50, x_dim]),name='glw3')
         self.linear_b3 = tf.Variable(tf.zeros([x_dim]),name='glb3')
-        
-        self.training = True
 
  # Build G Graph
     def __call__(self, z,y):
@@ -96,20 +94,30 @@ class Classifier(object):
 def lrelu(x, alpha):
     return tf.nn.relu(x) - alpha * tf.nn.relu(-x)
 
+
 class Inverter_Regularizer(object):
     def __init__(self, NUM_LABEL, x_dim, weight_shape, INV_HIDDEN):
         self.w_model = tf.Variable(glorot_init([weight_shape, INV_HIDDEN]))
         self.w_label = tf.Variable(glorot_init([NUM_LABEL, INV_HIDDEN]))
+        self.w_aux = tf.Variable(glorot_init([x_dim, INV_HIDDEN]))
         self.w_out = tf.Variable(glorot_init([INV_HIDDEN, x_dim]))
         self.b_in = tf.Variable(tf.zeros([INV_HIDDEN]))
         self.b_out = tf.Variable(tf.zeros([x_dim]))
         
-    def __call__(self, y, model_weights):
+    def __call__(self, y, model_weights, aux):
         # Input Layer
-        ww = tf.matmul(model_weights, self.w_model)
-        wy = tf.matmul(y, self.w_label)
-        wt = tf.add(wy, ww)
-        hidden_layer =    tf.add(wt, self.b_in)
+        if aux == None:
+            ww = tf.matmul(model_weights, self.w_model)
+            wy = tf.matmul(y, self.w_label)
+            wt = tf.add(wy, ww)
+        else:
+            ww = tf.matmul(model_weights, self.w_model)
+            wy = tf.matmul(y, self.w_label)
+            wo = tf.matmul(aux, self.w_aux)
+            wh = tf.add(wy, ww)
+            wt = tf.add(wh,wo)
+
+        hidden_layer = tf.add(wt, self.b_in)
         rect = lrelu(hidden_layer, 0.3)
         # Output Layer
         out_layer = tf.add(tf.matmul(rect, self.w_out), self.b_out)
