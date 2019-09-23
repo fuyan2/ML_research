@@ -93,7 +93,7 @@ class snw_Discriminator:
     self.conv_w2 = tf.get_variable('dw2', shape=[4, 4, 64, 128])
     self.conv_w3 = tf.get_variable('dw3', shape=[3, 3, 128, 128])
     self.conv_w4 = tf.get_variable('dw4', shape=[4, 4, 128, 256])
-    self.conv_w5 = tf.get_variable('dw5', shape=[3, 3, 256, 256])
+    # self.conv_w5 = tf.get_variable('dw5', shape=[3, 3, 256, 256])
 
     # self.conv_b1 = tf.Variable(tf.constant(0.1, shape=[64]), name='db1') 
     # self.conv_b2 = tf.Variable(tf.constant(0.1, shape=[128]), name='db2') 
@@ -121,10 +121,10 @@ class snw_Discriminator:
     conv_xw4 = tf.nn.conv2d(conv_h3,spectral_normed_weight(self.conv_w4, num_iters=1, update_collection=SPECTRAL_NORM_UPDATE_OPS),strides=[1, 2, 2, 1], padding='SAME')
     xw4_norm = tf.layers.batch_normalization(conv_xw4, training=self.training)
     conv_h4 = tf.nn.leaky_relu(xw4_norm)
-    conv_xw5 = tf.nn.conv2d(conv_h4,spectral_normed_weight(self.conv_w5, num_iters=1, update_collection=SPECTRAL_NORM_UPDATE_OPS),strides=[1, 1, 1, 1], padding='SAME')
-    xw5_norm = tf.layers.batch_normalization(conv_xw5, training=self.training)
-    conv_h5 = tf.nn.leaky_relu(xw5_norm)
-    conv_h5_flat = tf.reshape(conv_h5, [-1, 7*7*256])
+    # conv_xw5 = tf.nn.conv2d(conv_h4,spectral_normed_weight(self.conv_w5, num_iters=1, update_collection=SPECTRAL_NORM_UPDATE_OPS),strides=[1, 1, 1, 1], padding='SAME')
+    # xw5_norm = tf.layers.batch_normalization(conv_xw5, training=self.training)
+    # conv_h5 = tf.nn.leaky_relu(xw5_norm)
+    conv_h5_flat = tf.reshape(conv_h4, [-1, 7*7*256])
     x_y = tf.concat((conv_h5_flat,label),1)
     linear1 = tf.matmul(x_y, spectral_normed_weight(self.linear_w1, num_iters=1, update_collection=SPECTRAL_NORM_UPDATE_OPS)) + self.linear_b1
     linear1 = tf.nn.leaky_relu(linear1)

@@ -147,7 +147,7 @@ if cnn_gan:
     disc_fake = D(gen_sample_unflat, gen_label)
 
     # D Network Variables
-    disc_vars = [D.linear_w1, D.linear_b1, D.linear_w2, D.conv_w1, D.conv_w2, D.conv_w3, D.conv_w4, D.conv_w5]
+    disc_vars = [D.linear_w1, D.linear_b1, D.linear_w2, D.conv_w1, D.conv_w2, D.conv_w3, D.conv_w4]
 
 else:
     G = Generator(noise_dim, NUM_LABEL, x_dim, gan_batch_size)
