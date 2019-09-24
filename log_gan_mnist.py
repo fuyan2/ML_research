@@ -23,7 +23,7 @@ import math
 from skimage.measure import compare_ssim
 from models import *
 from utils import *
-from snwgan import snw_Generator, snw_Discriminator
+from snwgan import snw_Generator, snw_Discriminator, cnn_Discriminator
 inf = 1e9
 
 tf.reset_default_graph()
@@ -142,7 +142,7 @@ if cnn_gan:
 
     # Build 2 D Networks (one from noise input, one from generated samples)
     aux_x_unflat = tf.reshape(aux_x, [gan_batch_size, 28, 28, 1])
-    D = snw_Discriminator(NUM_LABEL) 
+    D = cnn_Discriminator(NUM_LABEL) 
     disc_real = D(aux_x_unflat, aux_label)
     disc_fake = D(gen_sample_unflat, gen_label)
 
@@ -413,7 +413,7 @@ def train(beta, model_l2, test, load_model):
             #         plot_nn_image('comparison/nn/nn_out',str(i), sess)
 
 if __name__ == '__main__':
-    test = 'beta'
+    test = 'avg_img'
     
     if test == 'l1': 
         # beta = 0
@@ -544,7 +544,7 @@ if __name__ == '__main__':
     elif test == 'avg_img':
         betas = 0
         l2_coef = 0.0001
-        load_m = False
+        load_m = True
         aux_x_data = np.repeat(np.reshape(avg_digit_img,[1,x_dim]),digits_y_train.shape[0], axis=0)
         aux_y_data = digits_y_train
         aux_y_data = one_hot(digits_y_train, 10)
