@@ -560,7 +560,8 @@ if __name__ == '__main__':
         distances, ssims = train(betas, l2_coef, test, load_m)
 
     elif test == 'beta':
-        betas = [0, 5, 10, 20, 30, 40, 60, 80, 100]
+        # betas = [0, 5, 10, 20, 30, 40, 60, 80, 100]
+        betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
         l2_coef = 0.001
         # Use letters as aux
         load_m = False
@@ -584,11 +585,11 @@ if __name__ == '__main__':
         for beta in betas:
             acc[i], gan_distances[i], gan_ssims[i], fred_distances[i], fred_ssims[i] = train(beta, l2_coef, test+str(beta), load_m)    
             i += 1
-        np.save('comparison/temp/beta_dis_gan', gan_distances)
-        np.save('comparison/temp/beta_acc', acc)
-        np.save('comparison/temp/beta_ssim_gan', gan_ssims)
-        np.save('comparison/temp/beta_dis_fred', fred_distances)
-        np.save('comparison/temp/beta_ssim_fred', fred_ssims)
+        np.save('comparison/temp/beta_dis_gan_aiden_aux_avgimg', gan_distances)
+        np.save('comparison/temp/beta_acc_aiden_avgimg', acc)
+        np.save('comparison/temp/beta_ssim_gan_aiden_aux_avgimg', gan_ssims)
+        np.save('comparison/temp/beta_dis_fred_aiden_aux_avgimg', fred_distances)
+        np.save('comparison/temp/beta_ssim_fred_aiden_aux_avgimg', fred_ssims)
         # gan_distances = np.load('comparison/temp/beta_dis_gan.npy')
         # acc = np.load('comparison/temp/beta_acc.npy')
         # gan_ssims = np.load('comparison/temp/beta_ssim_gan.npy')
