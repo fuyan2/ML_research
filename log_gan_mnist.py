@@ -43,7 +43,7 @@ beta = 0 #1, 0.5
 model_l2 = 0 #0.0001 
 wasserstein = True
 cnn_gan = False
-inverter_take_avgimg = False
+inverter_take_avgimg = True
 #Fredrickson Params
 ALPHA = 100000
 BETA = 5
@@ -183,15 +183,15 @@ def wgan_grad_pen(batch_size,x,label, G_sample):
     return lam*grad_pen
 
 if wasserstein:
-    gen_loss = -tf.reduce_mean(similarity*disc_fake) + GAN_CLASS_COE*gan_class_loss + 1. * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
+    gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss + 1. * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
     # gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights)
-    disc_loss = -tf.reduce_mean(disc_real) + tf.reduce_mean(disc_fake) #+ wgan_grad_pen(gan_batch_size,aux_x, aux_label, gen_sample)
+    disc_loss = -tf.reduce_mean(similarity*(disc_real - disc_fake)) #+ wgan_grad_pen(gan_batch_size,aux_x, aux_label, gen_sample)
     clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in disc_vars] #0.01!
     train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(gen_loss, var_list=gen_vars)
     train_disc = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(disc_loss, var_list=disc_vars)
 else:  
-    gen_loss = -tf.reduce_mean(similarity*tf.log(tf.maximum(0.00001, disc_fake))) + GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
-    disc_loss = -tf.reduce_mean(tf.log(tf.maximum(0.0000001, disc_real)) + tf.log(tf.maximum(0.0000001, 1. - disc_fake))) 
+    gen_loss = -tf.reduce_mean(tf.log(tf.maximum(0.00001, disc_fake))) + GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
+    disc_loss = -tf.reduce_mean(similarity*(tf.log(tf.maximum(0.0000001, disc_real)) + tf.log(tf.maximum(0.0000001, 1. - disc_fake)))) 
     train_gen = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(gen_loss, var_list=gen_vars)
     train_disc = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(disc_loss, var_list=disc_vars)
     
@@ -411,7 +411,7 @@ def train(beta, model_l2, test, load_model):
             #         plot_nn_image('comparison/nn/nn_out',str(i), sess)
 
 if __name__ == '__main__':
-    test = 'avg_img'
+    test = 'beta'
     
     if test == 'l1': 
         # beta = 0
@@ -560,7 +560,7 @@ if __name__ == '__main__':
 
     elif test == 'beta':
         betas = [0, 5, 10, 20, 30, 40, 60, 80, 100]
-        l2_coef = 0.0001
+        l2_coef = 0.001
         # Use letters as aux
         load_m = False
         # aux_x_data = letters_x_train
@@ -583,26 +583,33 @@ if __name__ == '__main__':
         for beta in betas:
             acc[i], gan_distances[i], gan_ssims[i], fred_distances[i], fred_ssims[i] = train(beta, l2_coef, test+str(beta), load_m)    
             i += 1
-        np.save('comparison/temp/beta_dis_gan', gan_distances)
-        np.save('comparison/temp/beta_acc', acc)
-        np.save('comparison/temp/beta_ssim_gan', gan_ssims)
-        np.save('comparison/temp/beta_dis_fred', fred_distances)
-        np.save('comparison/temp/beta_ssim_fred', fred_ssims)
-        # distances = np.load('comparison/temp/beta_dis.npy')
+        # np.save('comparison/temp/beta_dis_gan', gan_distances)
+        # np.save('comparison/temp/beta_acc', acc)
+        # np.save('comparison/temp/beta_ssim_gan', gan_ssims)
+        # np.save('comparison/temp/beta_dis_fred', fred_distances)
+        # np.save('comparison/temp/beta_ssim_fred', fred_ssims)
+        # gan_distances = np.load('comparison/temp/beta_dis_gan.npy')
         # acc = np.load('comparison/temp/beta_acc.npy')
-        # ssims = np.load('comparison/temp/beta_ssim.npy')
-        # plt.show()
-        # plt.plot(betas, distances)
-        # plt.xlabel('model beta coefficient')
-        # plt.ylabel('sq distance between mi and avg')
-        # plt.savefig('comparison/beta_vs_sq_dis_aiden_avgimg_against_gan_letters3')
-        # plt.close()
-        # plt.plot(betas, acc)
-        # plt.xlabel('model beta coefficient')
-        # plt.ylabel('accuracy')
-        # plt.savefig('comparison/beta_vs_accuracy_aiden_avgimg_against_gan_letters3')
-        # plt.close()
-        # plt.plot(betas, ssims)
-        # plt.xlabel('model beta coefficient')
-        # plt.ylabel('ssim between mi and avg')
-        # plt.savefig('comparison/beta_vs_ssim')
+        # gan_ssims = np.load('comparison/temp/beta_ssim_gan.npy')
+        # fred_distances = np.load('comparison/temp/beta_dis_fred.npy')
+        # fred_ssims = np.load('comparison/temp/beta_ssim_fred.npy')
+        plt.close()
+        plt.plot(betas, gan_distances, label='gan_distances')
+        plt.plot(betas, fred_distances, label='fred_distances')
+        plt.xlabel('model beta coefficient')
+        plt.ylabel('sq distance between mi and avg')
+        plt.legend(loc='best')
+        plt.savefig('comparison/beta_vs_sq_dis_aiden_avgimg')
+        plt.close()
+        plt.plot(betas, acc)
+        plt.xlabel('model beta coefficient')
+        plt.ylabel('accuracy')
+        plt.legend(loc='best')
+        plt.savefig('comparison/beta_vs_accuracy_aiden_avgimg')
+        plt.close()
+        plt.plot(betas, gan_ssims, label='gan_ssims')
+        plt.plot(betas, fred_ssims, label='fred_ssims')
+        plt.xlabel('model beta coefficient')
+        plt.ylabel('ssim between mi and avg')
+        plt.legend(loc='best')
+        plt.savefig('comparison/beta_vs_ssims_aiden_avgimg')
