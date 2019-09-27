@@ -15,6 +15,7 @@ import os
 import gzip
 import struct
 import array
+import sys
 
 import numpy as np
 import tensorflow as tf
@@ -412,7 +413,7 @@ def train(beta, model_l2, test, load_model):
             #         plot_nn_image('comparison/nn/nn_out',str(i), sess)
 
 if __name__ == '__main__':
-    test = 'beta'
+    test = sys.argv[1]
     
     if test == 'l1': 
         # beta = 0
