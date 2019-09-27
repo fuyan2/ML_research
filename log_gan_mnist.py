@@ -529,16 +529,56 @@ if __name__ == '__main__':
         plt.savefig('comparison/aux_vs_ssim0')
 
     elif test == 'letters':
-        betas = 0
-        l2_coef = 0.0001
-        load_m = True
+        # betas = [0, 5, 10, 20, 30, 40, 60, 80, 100]
+        betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
+        l2_coef = 0.001
+        # Use letters as aux
+        load_m = False
         aux_x_data = letters_x_train
         aux_y_data = digits_y_train
         print("aux data size is ", aux_x_data.shape[0])
         aux_y_data = one_hot(digits_y_train, 10)
         aux_y_data = aux_y_data[:aux_x_data.shape[0], :]
-       
-        distances, ssims = train(betas, l2_coef, test, load_m)
+
+        gan_distances = np.zeros(len(betas))
+        gan_ssims = np.zeros(len(betas))
+        acc = np.zeros(len(betas))
+        fred_distances = np.zeros(len(betas))
+        fred_ssims = np.zeros(len(betas))
+        i = 0
+        for beta in betas:
+            acc[i], gan_distances[i], gan_ssims[i], fred_distances[i], fred_ssims[i] = train(beta, l2_coef, test+str(beta), load_m)    
+            i += 1
+        np.save('comparison/temp/beta_dis_gan_aiden_aux_letters', gan_distances)
+        np.save('comparison/temp/beta_acc_aiden_letters', acc)
+        np.save('comparison/temp/beta_ssim_gan_aiden_aux_letters', gan_ssims)
+        np.save('comparison/temp/beta_dis_fred_aiden_aux_letters', fred_distances)
+        np.save('comparison/temp/beta_ssim_fred_aiden_aux_letters', fred_ssims)
+        # gan_distances = np.load('comparison/temp/beta_dis_gan.npy')
+        # acc = np.load('comparison/temp/beta_acc.npy')
+        # gan_ssims = np.load('comparison/temp/beta_ssim_gan.npy')
+        # fred_distances = np.load('comparison/temp/beta_dis_fred.npy')
+        # fred_ssims = np.load('comparison/temp/beta_ssim_fred.npy')
+        plt.close()
+        plt.plot(betas, gan_distances, label='gan_distances')
+        plt.plot(betas, fred_distances, label='fred_distances')
+        plt.xlabel('model beta coefficient')
+        plt.ylabel('sq distance between mi and avg')
+        plt.legend(loc='best')
+        plt.savefig('comparison/beta_vs_sq_dis_aiden_avgimg_aux_letters')
+        plt.close()
+        plt.plot(betas, acc)
+        plt.xlabel('model beta coefficient')
+        plt.ylabel('accuracy')
+        plt.legend(loc='best')
+        plt.savefig('comparison/beta_vs_accuracy_aiden_avgimg_aux_letters')
+        plt.close()
+        plt.plot(betas, gan_ssims, label='gan_ssims')
+        plt.plot(betas, fred_ssims, label='fred_ssims')
+        plt.xlabel('model beta coefficient')
+        plt.ylabel('ssim between mi and avg')
+        plt.legend(loc='best')
+        plt.savefig('comparison/beta_vs_ssims_aiden_avgimg_aux_letters')
 
     elif test == 'avg_img':
         betas = 0
