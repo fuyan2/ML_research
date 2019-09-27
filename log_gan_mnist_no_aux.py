@@ -38,12 +38,12 @@ NUM_LABEL = 10 #10
 GAN_CLASS_COE = 100 #10
 gan_batch_size = 1000
 num_data = 10000
-INV_HIDDEN = 5000
+INV_HIDDEN = 5000 # 5000
 beta = 0 #1, 0.5
 model_l2 = 0 #0.0001 
 wasserstein = True
 cnn_gan = False
-inverter_take_avgimg = True
+inverter_take_avgimg = False
 #Fredrickson Params
 ALPHA = 100000
 BETA = 5
@@ -183,8 +183,8 @@ def wgan_grad_pen(batch_size,x,label, G_sample):
     return lam*grad_pen
 
 if wasserstein:
-    gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss + 1. * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
-    # gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights)
+    # gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss + 1. * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
+    gen_loss = GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights)
     disc_loss = -tf.reduce_mean(similarity*(disc_real - disc_fake)) #+ wgan_grad_pen(gan_batch_size,aux_x, aux_label, gen_sample)
     clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in disc_vars] #0.01!
     train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(gen_loss, var_list=gen_vars)
@@ -220,8 +220,8 @@ def fred_mi(i, y_conv, sess, iterate):
     cost_x = 1 - tf.squeeze(tf.gather(y_conv, i, axis=1), 0)
     gradient_of_cost = tf.gradients(cost_x, x)
     x_inv = x - tf.scalar_mul(LAMBDA, tf.squeeze(gradient_of_cost, 0))
-    # x_mi = np.zeros((1, x_dim))
-    x_mi = np.reshape(avg_digit_img,(1,x_dim))
+    x_mi = np.zeros((1, x_dim))
+    # x_mi = np.reshape(avg_digit_img,(1,x_dim))
     previous_costs = [inf,inf,inf,inf,inf]
 
     for i in range(ALPHA):
@@ -376,11 +376,11 @@ def train(beta, model_l2, test, load_model):
                 batch = sess.run(next_batch)
                 z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
                 #! Train Discriminator
-                train_disc.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
-                if i % 5 == 0:
-                    train_gen.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
+                # train_disc.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
+                # if i % 5 == 0:
+                train_gen.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
 
-                if i % 2000 == 0:
+                if i % 10000 == 0:
                     gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
                     print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f, Classification loss: %f' % (i, gl, dl, cl))
 
@@ -584,11 +584,11 @@ if __name__ == '__main__':
         for beta in betas:
             acc[i], gan_distances[i], gan_ssims[i], fred_distances[i], fred_ssims[i] = train(beta, l2_coef, test+str(beta), load_m)    
             i += 1
-        np.save('comparison/temp/beta_dis_gan', gan_distances)
-        np.save('comparison/temp/beta_acc', acc)
-        np.save('comparison/temp/beta_ssim_gan', gan_ssims)
-        np.save('comparison/temp/beta_dis_fred', fred_distances)
-        np.save('comparison/temp/beta_ssim_fred', fred_ssims)
+        # np.save('comparison/temp/beta_dis_gan', gan_distances)
+        # np.save('comparison/temp/beta_acc', acc)
+        # np.save('comparison/temp/beta_ssim_gan', gan_ssims)
+        # np.save('comparison/temp/beta_dis_fred', fred_distances)
+        # np.save('comparison/temp/beta_ssim_fred', fred_ssims)
         # gan_distances = np.load('comparison/temp/beta_dis_gan.npy')
         # acc = np.load('comparison/temp/beta_acc.npy')
         # gan_ssims = np.load('comparison/temp/beta_ssim_gan.npy')
@@ -600,17 +600,17 @@ if __name__ == '__main__':
         plt.xlabel('model beta coefficient')
         plt.ylabel('sq distance between mi and avg')
         plt.legend(loc='best')
-        plt.savefig('comparison/beta_vs_sq_dis_aiden_avgimg_aux_avgimg')
+        plt.savefig('comparison/beta_vs_sq_dis_NO_aux')
         plt.close()
         plt.plot(betas, acc)
         plt.xlabel('model beta coefficient')
         plt.ylabel('accuracy')
         plt.legend(loc='best')
-        plt.savefig('comparison/beta_vs_accuracy_aiden_avgimg_aux_avgimg')
+        plt.savefig('comparison/beta_vs_accuracy_NO_aux')
         plt.close()
         plt.plot(betas, gan_ssims, label='gan_ssims')
         plt.plot(betas, fred_ssims, label='fred_ssims')
         plt.xlabel('model beta coefficient')
         plt.ylabel('ssim between mi and avg')
         plt.legend(loc='best')
-        plt.savefig('comparison/beta_vs_ssims_aiden_avgimg_aux_avgimg')
+        plt.savefig('comparison/beta_vs_ssims_NO_aux')
