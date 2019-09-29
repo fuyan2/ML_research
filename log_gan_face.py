@@ -30,7 +30,7 @@ noise_dim = 500 #20
 NUM_LABEL = 20 #10
 GAN_CLASS_COE = 100 #10
 gan_batch_size = 40
-INV_HIDDEN = 500
+INV_HIDDEN = 5000
 beta = 0 #1, 0.5
 model_l2 = 0 #0.0001 
 wasserstein = True
@@ -163,7 +163,8 @@ def fred_mi(i, y_conv, sess, iterate):
     cost_x = 1 - tf.squeeze(tf.gather(y_conv, i, axis=1), 0)
     gradient_of_cost = tf.gradients(cost_x, x)
     x_inv = x - tf.scalar_mul(LAMBDA, tf.squeeze(gradient_of_cost, 0))
-    x_mi = np.zeros((1, x_dim))
+    #x_mi = np.zeros((1, x_dim))
+    x_mi = np.reshape(avg_orl_img,(1,x_dim))
     previous_costs = [inf,inf,inf,inf,inf]
 
     for i in range(ALPHA):
@@ -324,7 +325,7 @@ def train(beta, model_l2, test, load_model):
                 return avg_dis, avg_ssim
 
 if __name__ == '__main__':
-    test = 'other_people'
+    test = 'beta'
 
     if test == 'other_people':
         betas = 0
@@ -357,41 +358,52 @@ if __name__ == '__main__':
         distances, ssims = train(betas, l2_coef, test, load_m)
 
     elif test == 'beta':
-        betas = [0, 5, 10, 20, 30, 40, 60, 80, 100]
-        l2_coef = 0.0001
+        betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
+        l2_coef = 0.001
         # Use letters as aux
         load_m = False
-        aux_x_data = letters_x_train
+        aux_x_data = orl_x_aux
         aux_y_data = orl_y_train
         print("aux data size is ", aux_x_data.shape[0])
-        aux_y_data = one_hot(orl_y_train, 10)
-        aux_y_data = aux_y_data[:aux_x_data.shape[0], :]
+        aux_y_data = one_hot(orl_y_train, 20)
+        aux_x_data = aux_x_data[:aux_y_data.shape[0], :]
 
-        distances = np.zeros(len(betas))
+        gan_distances = np.zeros(len(betas))
+        gan_ssims = np.zeros(len(betas))
         acc = np.zeros(len(betas))
-        ssims = np.zeros(len(betas))
+        fred_distances = np.zeros(len(betas))
+        fred_ssims = np.zeros(len(betas))
         i = 0
         for beta in betas:
-            distances[i], acc[i], ssims[i] = train(beta, l2_coef, test+str(beta), load_m)    
+            acc[i], gan_distances[i], gan_ssims[i], fred_distances[i], fred_ssims[i] = train(beta, l2_coef, test+str(beta), load_m)    
             i += 1
-        np.save('comparison/temp/beta_dis', distances)
-        np.save('comparison/temp/beta_acc', acc)
-        np.save('comparison/temp/beta_ssim', ssims)
-        # distances = np.load('comparison/temp/beta_dis.npy')
+        np.save('comparison/temp/beta_dis_gan_aiden_aux_others', gan_distances)
+        np.save('comparison/temp/beta_acc_aiden_letters', acc)
+        np.save('comparison/temp/beta_ssim_gan_aiden_aux_others', gan_ssims)
+        np.save('comparison/temp/beta_dis_fred_aiden_aux_others', fred_distances)
+        np.save('comparison/temp/beta_ssim_fred_aiden_aux_others', fred_ssims)
+        # gan_distances = np.load('comparison/temp/beta_dis_gan.npy')
         # acc = np.load('comparison/temp/beta_acc.npy')
-        # ssims = np.load('comparison/temp/beta_ssim.npy')
-        plt.show()
-        plt.plot(betas, distances)
+        # gan_ssims = np.load('comparison/temp/beta_ssim_gan.npy')
+        # fred_distances = np.load('comparison/temp/beta_dis_fred.npy')
+        # fred_ssims = np.load('comparison/temp/beta_ssim_fred.npy')
+        plt.close()
+        plt.plot(betas, gan_distances, label='gan_distances')
+        plt.plot(betas, fred_distances, label='fred_distances')
         plt.xlabel('model beta coefficient')
         plt.ylabel('sq distance between mi and avg')
-        plt.savefig('comparison/beta_vs_sq_dis')
+        plt.legend(loc='best')
+        plt.savefig('comparison/beta_vs_sq_dis_aiden_avgimg_aux_others.png')
         plt.close()
         plt.plot(betas, acc)
         plt.xlabel('model beta coefficient')
         plt.ylabel('accuracy')
-        plt.savefig('comparison/beta_vs_accuracy')
+        plt.legend(loc='best')
+        plt.savefig('comparison/beta_vs_accuracy_aiden_avgimg_aux_others.png')
         plt.close()
-        plt.plot(betas, ssims)
+        plt.plot(betas, gan_ssims, label='gan_ssims')
+        plt.plot(betas, fred_ssims, label='fred_ssims')
         plt.xlabel('model beta coefficient')
         plt.ylabel('ssim between mi and avg')
-        plt.savefig('comparison/beta_vs_ssim')
+        plt.legend(loc='best')
+        plt.savefig('comparison/beta_vs_ssims_aiden_avgimg_aux_others.png')
