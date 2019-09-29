@@ -275,7 +275,7 @@ def plot_gan_image(name, epoch, sess):
         col = i%4
         ax[row][col].imshow(np.reshape(avg_g,(28, 28)), cmap="gray", origin='lower')
 
-    plt.savefig(name+epoch)
+    plt.savefig(name+epoch+'.png')
     plt.close()
     return inverted_xs
 
@@ -601,17 +601,17 @@ if __name__ == '__main__':
         plt.xlabel('model beta coefficient')
         plt.ylabel('sq distance between mi and avg')
         plt.legend(loc='best')
-        plt.savefig('comparison/beta_vs_sq_dis_NO_aux')
+        plt.savefig('comparison/beta_vs_sq_dis_NO_aux.png')
         plt.close()
         plt.plot(betas, acc)
         plt.xlabel('model beta coefficient')
         plt.ylabel('accuracy')
         plt.legend(loc='best')
-        plt.savefig('comparison/beta_vs_accuracy_NO_aux')
+        plt.savefig('comparison/beta_vs_accuracy_NO_aux.png')
         plt.close()
         plt.plot(betas, gan_ssims, label='gan_ssims')
         plt.plot(betas, fred_ssims, label='fred_ssims')
         plt.xlabel('model beta coefficient')
         plt.ylabel('ssim between mi and avg')
         plt.legend(loc='best')
-        plt.savefig('comparison/beta_vs_ssims_NO_aux')
+        plt.savefig('comparison/beta_vs_ssims_NO_aux.png')

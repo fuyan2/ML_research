@@ -276,7 +276,7 @@ def plot_gan_image(name, epoch, sess):
         col = i%4
         ax[row][col].imshow(np.reshape(avg_g,(28, 28)), cmap="gray", origin='lower')
 
-    plt.savefig(name+epoch)
+    plt.savefig(name+epoch+'.png')
     plt.close()
     return inverted_xs
 
@@ -464,25 +464,25 @@ if __name__ == '__main__':
             for l2 in l2_coef:
                 distances[i], acc[i], ssims[i] = train(beta, l2, test, load_m)    
                 i += 1
-            np.save('comparison/temp/quartertrain_l2_dis', distances)
-            np.save('comparison/temp/quartertrain_l2_acc', acc)
-            np.save('comparison/temp/quartertrain_l2_ssim', ssims)
+            np.save('comparison/temp/quartertrain_l2_dis.png', distances)
+            np.save('comparison/temp/quartertrain_l2_acc.png', acc)
+            np.save('comparison/temp/quartertrain_l2_ssim.png', ssims)
 
         plt.close()
         plt.plot(l2_coef, distances)
         plt.xlabel('model l2 coefficient')
         plt.ylabel('sq distance between mi and avg')
-        plt.savefig('comparison/l2_coef_vs_sq_dis_quartertrain')
+        plt.savefig('comparison/l2_coef_vs_sq_dis_quartertrain.png')
         plt.close()
         plt.plot(l2_coef, acc)
         plt.xlabel('model l2 coefficient')
         plt.ylabel('accuracy')
-        plt.savefig('comparison/l2_coef_vs_accuracy_quartertrain')
+        plt.savefig('comparison/l2_coef_vs_accuracy_quartertrain.png')
         plt.close()
         plt.plot(l2_coef, ssims)
         plt.xlabel('model l2 coefficient')
         plt.ylabel('ssim between mi and avg')
-        plt.savefig('comparison/l2_coef_vs_ssim_quartertrain')
+        plt.savefig('comparison/l2_coef_vs_ssim_quartertrain.png')
 
     elif test == 'auxiliary':
         betas = [0,5]
@@ -522,12 +522,12 @@ if __name__ == '__main__':
         plt.plot(range(NUM_LABEL), distances0)
         plt.xlabel('auxiliary dataset')
         plt.ylabel('sq distance between mi and avg')
-        plt.savefig('comparison/aux_vs_sq_dis0')
+        plt.savefig('comparison/aux_vs_sq_dis0.png')
         plt.close()
         plt.plot(range(NUM_LABEL), ssims0)
         plt.xlabel('auxiliary dataset')
         plt.ylabel('ssim between mi and avg')
-        plt.savefig('comparison/aux_vs_ssim0')
+        plt.savefig('comparison/aux_vs_ssim0.png')
 
     elif test == 'letters':
         # betas = [0, 5, 10, 20, 30, 40, 60, 80, 100]
@@ -566,20 +566,20 @@ if __name__ == '__main__':
         plt.xlabel('model beta coefficient')
         plt.ylabel('sq distance between mi and avg')
         plt.legend(loc='best')
-        plt.savefig('comparison/beta_vs_sq_dis_aiden_avgimg_aux_letters')
+        plt.savefig('comparison/beta_vs_sq_dis_aiden_avgimg_aux_letters.png')
         plt.close()
         plt.plot(betas, acc)
         plt.xlabel('model beta coefficient')
         plt.ylabel('accuracy')
         plt.legend(loc='best')
-        plt.savefig('comparison/beta_vs_accuracy_aiden_avgimg_aux_letters')
+        plt.savefig('comparison/beta_vs_accuracy_aiden_avgimg_aux_letters.png')
         plt.close()
         plt.plot(betas, gan_ssims, label='gan_ssims')
         plt.plot(betas, fred_ssims, label='fred_ssims')
         plt.xlabel('model beta coefficient')
         plt.ylabel('ssim between mi and avg')
         plt.legend(loc='best')
-        plt.savefig('comparison/beta_vs_ssims_aiden_avgimg_aux_letters')
+        plt.savefig('comparison/beta_vs_ssims_aiden_avgimg_aux_letters.png')
 
     elif test == 'avg_img':
         betas = 0
@@ -642,17 +642,17 @@ if __name__ == '__main__':
         plt.xlabel('model beta coefficient')
         plt.ylabel('sq distance between mi and avg')
         plt.legend(loc='best')
-        plt.savefig('comparison/beta_vs_sq_dis_aiden_avgimg_aux_avgimg')
+        plt.savefig('comparison/beta_vs_sq_dis_aiden_avgimg_aux_avgimg.png')
         plt.close()
         plt.plot(betas, acc)
         plt.xlabel('model beta coefficient')
         plt.ylabel('accuracy')
         plt.legend(loc='best')
-        plt.savefig('comparison/beta_vs_accuracy_aiden_avgimg_aux_avgimg')
+        plt.savefig('comparison/beta_vs_accuracy_aiden_avgimg_aux_avgimg.png')
         plt.close()
         plt.plot(betas, gan_ssims, label='gan_ssims')
         plt.plot(betas, fred_ssims, label='fred_ssims')
         plt.xlabel('model beta coefficient')
         plt.ylabel('ssim between mi and avg')
         plt.legend(loc='best')
-        plt.savefig('comparison/beta_vs_ssims_aiden_avgimg_aux_avgimg')
+        plt.savefig('comparison/beta_vs_ssims_aiden_avgimg_aux_avgimg.png')
