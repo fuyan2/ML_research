@@ -202,20 +202,24 @@ def plot_gan_image(name, epoch, sess):
         # Noise input.
         z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
         g = sess.run([gen_sample], feed_dict={gen_input: z, desired_label: d_label})
-        g = np.reshape(g, [gan_batch_size, xrow, xcol])
-        g = g[0,:] #only pick one image
-        inverted_xs[i] = np.reshape(g, x_dim)
+        g = np.reshape(g, (gan_batch_size, x_dim))
+        avg_g = np.mean(g, axis=0)
+        # g = np.reshape(g, [gan_batch_size, 28, 28])
+        # g = g[0,:] #only pick one image
+
+        inverted_xs[i] = avg_g
     
         # Make background black instead of grey
-        # g = np.where(g<0,0, g)
-        # g = np.where(g>1, 1, g)
+        avg_g = np.where(avg_g<0, 0, avg_g)
+        avg_g = np.where(avg_g>1, 1, avg_g)
 
         # for j in range(2):
-        row = i//5
-        col = i%5
-        ax[row][col].imshow(g, cmap="gray")
+        row = i//4
+        col = i%4
+        ax[row][col].imshow(np.reshape(avg_g,(xrow, xcol)), cmap="gray", origin='lower')
 
-    plt.savefig(name+epoch)
+    plt.savefig(name+epoch+'.png')
+    plt.close()
     return inverted_xs
 
 # beta = 0
@@ -248,7 +252,7 @@ def train(beta, model_l2, test, load_model):
 
             # Train the Classifier First
             if load_model:
-                saver.restore(sess, '/tmp/face_model.ckpt')
+                saver.restore(sess, '/tmp/face_model_beta%d.ckpt'%beta)
                 print("Classifier Model restored.")
                 # test_acc, y_prediction = sess.run([accuracy, y_pred], feed_dict={x: orl_x_test, y: orl_y_test})
             else:
@@ -269,27 +273,22 @@ def train(beta, model_l2, test, load_model):
                 print("Model saved in path: %s" % save_path)
 
             # Train Fredrickson MI
-            # fig, ax = plt.subplots(6,5)
-            # inverted_xs = np.zeros((NUM_LABEL, x_dim))
-            # ssims = np.zeros(NUM_LABEL)
-            # for i in range(NUM_LABEL):
-            # fig, ax = plt.subplots(5)
-            # inverted_xs = np.zeros((5, x_dim))
-            # ssims = np.zeros(5)
-            # for i in range(5):
-            #     print("i = %d" % i)
-            #     inverted_xs[i] = fred_mi(i, y_ml, sess, 1)[0]
-            #     # row = i//5
-            #     # col = i%5
-            #     # ax[row][col]
-            #     ax[i].imshow(np.reshape(inverted_xs[i], (112, 92)), cmap="gray")
-            #     ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (112, 92)), np.reshape(inverted_xs[i], (112, 92)), data_range=1.0 - 0.0)        
+            fig, ax = plt.subplots(6,5)
+            inverted_xs = np.zeros((NUM_LABEL, x_dim))
+            ssims = np.zeros(NUM_LABEL)
+            for i in range(NUM_LABEL):
+                print("i = %d" % i)
+                inverted_xs[i] = fred_mi(i, y_ml, sess, 1)[0]
+                row = i//5
+                col = i%5
+                ax[row][col].imshow(np.reshape(inverted_xs[i], (112, 92)), cmap="gray")
+                ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (112, 92)), np.reshape(inverted_xs[i], (112, 92)), data_range=1.0 - 0.0)        
             
-            # plt.savefig('comparison/fred/fred_mi_%gbeta_%g_%s.png'%(beta,model_l2,test))
-            # dis = inverted_xs - avg_imgs[:5, :]
-            # l2_dis = np.linalg.norm(dis,ord=2,axis=1)
-            # avg_dis = np.mean(l2_dis)
-            # avg_ssim = np.mean(ssims)
+            plt.savefig('comparison/fred/fred_mi_%gbeta_%g_%s.png'%(beta,model_l2,test))
+            dis = inverted_xs - avg_imgs
+            l2_dis = np.linalg.norm(dis,ord=2,axis=1)
+            fred_avg_dis = np.mean(l2_dis)
+            fred_avg_ssim = np.mean(ssims)
 
 
             # Train GAN
@@ -310,19 +309,20 @@ def train(beta, model_l2, test, load_model):
 
                     inverted_xs = plot_gan_image('comparison/gan/gan_out'+test+'iter', str(i), sess)
 
-            inverted_xs = plot_gan_image('comparison/gan/gan_out',str(50000), sess)
+            inverted_xs = plot_gan_image('comparison/gan/gan_out',str(120000), sess)
             ssims = np.zeros(NUM_LABEL)
             for i in range(NUM_LABEL):
                 ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (xrow, xcol)), np.reshape(inverted_xs[i], (xrow, xcol)), data_range=1.0 - 0.0)
             dis = inverted_xs - avg_imgs
             l2_dis = np.linalg.norm(dis,ord=2,axis=1)
-            avg_dis = np.mean(l2_dis)
-            avg_ssim = np.mean(ssims)
+            gan_avg_dis = np.mean(l2_dis)
+            gan_avg_ssim = np.mean(ssims)
 
-            if test == 'l2' or test == 'l1' or test == 'beta':
-                return avg_dis, test_acc, avg_ssim
-            else:
-                return avg_dis, avg_ssim
+            return test_acc, gan_avg_dis, gan_avg_ssim, fred_avg_dis, fred_avg_ssim
+            # if test == 'l2' or test == 'l1' or test == 'beta':
+            #     return avg_dis, test_acc, avg_ssim
+            # else:
+            #     return avg_dis, avg_ssim
 
 if __name__ == '__main__':
     test = 'beta'
