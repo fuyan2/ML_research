@@ -39,18 +39,17 @@ NUM_LABEL = 10 #10
 GAN_CLASS_COE = 100 #10
 gan_batch_size = 1000
 num_data = 10000
-INV_HIDDEN = 5000
+INV_HIDDEN = 100 #5000
 beta = 0 #1, 0.5
 model_l2 = 0 #0.0001 
 wasserstein = True
 cnn_gan = False
 inverter_take_avgimg = True
 #Fredrickson Params
-ALPHA = 100000
+ALPHA = 20000
 BETA = 5
 GAMMA = 1
 LAMBDA = 0.06
-
 
 one_hot = lambda x, k: np.array(x[:,None] == np.arange(k)[None, :], dtype=int)
 
@@ -530,9 +529,9 @@ if __name__ == '__main__':
         plt.savefig('comparison/aux_vs_ssim0.png')
 
     elif test == 'letters':
-        # betas = [0, 5, 10, 20, 30, 40, 60, 80, 100]
-        betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
-        l2_coef = 0.001
+        betas = [0, 5, 10, 20, 30, 40, 60, 70, 80, 90, 100, 120]
+        # betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
+        l2_coef = 0.0001
         # Use letters as aux
         load_m = False
         aux_x_data = letters_x_train
@@ -555,11 +554,11 @@ if __name__ == '__main__':
         np.save('comparison/temp/beta_ssim_gan_aiden_aux_letters', gan_ssims)
         np.save('comparison/temp/beta_dis_fred_aiden_aux_letters', fred_distances)
         np.save('comparison/temp/beta_ssim_fred_aiden_aux_letters', fred_ssims)
-        # gan_distances = np.load('comparison/temp/beta_dis_gan.npy')
-        # acc = np.load('comparison/temp/beta_acc.npy')
-        # gan_ssims = np.load('comparison/temp/beta_ssim_gan.npy')
-        # fred_distances = np.load('comparison/temp/beta_dis_fred.npy')
-        # fred_ssims = np.load('comparison/temp/beta_ssim_fred.npy')
+        # gan_distances = np.load('comparison/temp/beta_dis_gan_aiden_aux_letters.npy')
+        # acc = np.load('comparison/temp/beta_acc_aiden_letters.npy')
+        # gan_ssims = np.load('comparison/temp/beta_ssim_gan_aiden_aux_letters.npy')
+        # fred_distances = np.load('comparison/temp/beta_dis_fred_aiden_aux_letters.npy')
+        # fred_ssims = np.load('comparison/temp/beta_ssim_fred_aiden_aux_letters.npy')
         plt.close()
         plt.plot(betas, gan_distances, label='gan_distances')
         plt.plot(betas, fred_distances, label='fred_distances')
@@ -601,16 +600,11 @@ if __name__ == '__main__':
         distances, ssims = train(betas, l2_coef, test, load_m)
 
     elif test == 'beta':
-        # betas = [0, 5, 10, 20, 30, 40, 60, 80, 100]
-        betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
-        l2_coef = 0.001
+        betas = [0, 5, 10, 20, 30, 40, 60, 70, 80, 90, 100, 120]
+        # betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
+        l2_coef = 0.0001
         # Use letters as aux
         load_m = False
-        # aux_x_data = letters_x_train
-        # # aux_y_data = digits_y_train
-        # # print("aux data size is ", aux_x_data.shape[0])
-        # # aux_y_data = one_hot(digits_y_train, 10)
-        # # aux_y_data = aux_y_data[:aux_x_data.shape[0], :]
         
         #Both gan and fred use avg image as starting point, 
         aux_x_data = np.repeat(np.reshape(avg_digit_img,[1,x_dim]),digits_y_train.shape[0], axis=0)
@@ -631,11 +625,12 @@ if __name__ == '__main__':
         np.save('comparison/temp/beta_ssim_gan_aiden_aux_avgimg', gan_ssims)
         np.save('comparison/temp/beta_dis_fred_aiden_aux_avgimg', fred_distances)
         np.save('comparison/temp/beta_ssim_fred_aiden_aux_avgimg', fred_ssims)
-        # gan_distances = np.load('comparison/temp/beta_dis_gan.npy')
-        # acc = np.load('comparison/temp/beta_acc.npy')
-        # gan_ssims = np.load('comparison/temp/beta_ssim_gan.npy')
-        # fred_distances = np.load('comparison/temp/beta_dis_fred.npy')
-        # fred_ssims = np.load('comparison/temp/beta_ssim_fred.npy')
+
+        # gan_distances = np.load('comparison/temp/beta_dis_gan_aiden_aux_avgimg.npy')
+        # acc = np.load('comparison/temp/beta_acc_aiden_avgimg.npy')
+        # gan_ssims = np.load('comparison/temp/beta_ssim_gan_aiden_aux_avgimg.npy')
+        # fred_distances = np.load('comparison/temp/beta_dis_fred_aiden_aux_avgimg.npy')
+        # fred_ssims = np.load('comparison/temp/beta_ssim_fred_aiden_aux_avgimg.npy')
         plt.close()
         plt.plot(betas, gan_distances, label='gan_distances')
         plt.plot(betas, fred_distances, label='fred_distances')
