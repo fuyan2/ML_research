@@ -135,22 +135,31 @@ gen_weights = tf.concat([tf.reshape(G.linear_w1,[1, -1]), tf.reshape(G.linear_b1
 
 # Build Loss
 similarity = tf.reduce_sum(tf.multiply(aux_label, desired_label), 1, keepdims=True )
-gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=desired_label, logits=gen_label)) + 0.001 * tf.nn.l2_loss(gen_weights) #0.01, only need when no auxiliary
+gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=desired_label, logits=gen_label))
+
+# Build wasserstein Loss
+def wgan_grad_pen(batch_size,x,label, G_sample):    
+    lam = 1   
+
+    eps = tf.random_uniform([batch_size,1], minval=0.0,maxval=1.0)
+    x_h = eps*x+(1-eps)*G_sample
+    # with tf.variable_scope("", reuse=True) as scope:
+    grad_d_x_h = tf.gradients(D(x_h, label), x_h)    
+    grad_norm = tf.norm(grad_d_x_h[0], axis=1, ord='euclidean')
+    grad_pen = tf.reduce_mean(tf.square(grad_norm-1))
+  
+    return lam*grad_pen
 
 if wasserstein:
-    gen_loss = -tf.reduce_mean(similarity*disc_fake) + GAN_CLASS_COE*gan_class_loss
-    disc_loss = -tf.reduce_mean(disc_real) + tf.reduce_mean(disc_fake)
-    clip_D = [p.assign(tf.clip_by_value(p, -0.0001, 0.0001)) for p in disc_vars] #0.01!
+    gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss + 1. * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
+    # gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights)
+    disc_loss = -tf.reduce_mean(similarity*(disc_real - disc_fake)) #+ wgan_grad_pen(gan_batch_size,aux_x, aux_label, gen_sample)
+    clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in disc_vars] #0.01!
+    train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(gen_loss, var_list=gen_vars)
+    train_disc = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(disc_loss, var_list=disc_vars)
 else:  
-    gen_loss = -tf.reduce_mean(similarity*tf.log(tf.maximum(0.00001, disc_fake))) + GAN_CLASS_COE*gan_class_loss
-    disc_loss = -tf.reduce_mean(tf.log(tf.maximum(0.0000001, disc_real)) + tf.log(tf.maximum(0.0000001, 1. - disc_fake))) 
-
-# Create training operations !
-if wasserstein:
-    # train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(gan_class_loss, var_list=gen_vars)
-    train_gen = tf.train.RMSPropOptimizer(learning_rate=learning_rate).minimize(gen_loss, var_list=gen_vars)
-    train_disc = tf.train.RMSPropOptimizer(learning_rate=learning_rate).minimize(disc_loss, var_list=disc_vars)
-else:
+    gen_loss = -tf.reduce_mean(tf.log(tf.maximum(0.00001, disc_fake))) + GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
+    disc_loss = -tf.reduce_mean(similarity*(tf.log(tf.maximum(0.0000001, disc_real)) + tf.log(tf.maximum(0.0000001, 1. - disc_fake)))) 
     train_gen = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(gen_loss, var_list=gen_vars)
     train_disc = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(disc_loss, var_list=disc_vars)
     
