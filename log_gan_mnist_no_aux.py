@@ -38,7 +38,7 @@ NUM_LABEL = 10 #10
 GAN_CLASS_COE = 100 #10
 gan_batch_size = 1000
 num_data = 10000
-INV_HIDDEN = 5000 # 5000
+INV_HIDDEN = 100 # 5000
 beta = 0 #1, 0.5
 model_l2 = 0 #0.0001 
 wasserstein = True
@@ -560,9 +560,9 @@ if __name__ == '__main__':
         distances, ssims = train(betas, l2_coef, test, load_m)
 
     elif test == 'beta':
-        # betas = [0, 5, 10, 20, 30, 40, 60, 80, 100]
-        betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
-        l2_coef = 0.001
+        betas = [0, 5, 10, 20, 30, 40, 60, 70, 80, 90, 100, 120]
+        # betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
+        l2_coef = 0.0001
         # Use letters as aux
         load_m = False
         # aux_x_data = letters_x_train

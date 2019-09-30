@@ -30,7 +30,7 @@ noise_dim = 500 #20
 NUM_LABEL = 20 #10
 GAN_CLASS_COE = 100 #10
 gan_batch_size = 40
-INV_HIDDEN = 5000
+INV_HIDDEN = 100 #5000 
 beta = 0 #1, 0.5
 model_l2 = 0 #0.0001 
 wasserstein = True
@@ -38,7 +38,6 @@ wasserstein = True
 #Fredrickson Params
 ALPHA = 5000
 BETA = 100
-GAMMA = 0.4
 LAMBDA = 0.2
 
 one_hot = lambda x, k: np.array(x[:,None] == np.arange(k)[None, :], dtype=int)
@@ -358,8 +357,10 @@ if __name__ == '__main__':
         distances, ssims = train(betas, l2_coef, test, load_m)
 
     elif test == 'beta':
-        betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
-        l2_coef = 0.001
+        betas = [0, 5, 10, 20, 30, 40, 60, 70, 80, 90, 100, 120]
+        # betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
+        l2_coef = 0.0001
+        
         # Use letters as aux
         load_m = False
         aux_x_data = orl_x_aux
@@ -382,11 +383,11 @@ if __name__ == '__main__':
         np.save('comparison/temp/beta_ssim_gan_aiden_aux_others', gan_ssims)
         np.save('comparison/temp/beta_dis_fred_aiden_aux_others', fred_distances)
         np.save('comparison/temp/beta_ssim_fred_aiden_aux_others', fred_ssims)
-        # gan_distances = np.load('comparison/temp/beta_dis_gan.npy')
-        # acc = np.load('comparison/temp/beta_acc.npy')
-        # gan_ssims = np.load('comparison/temp/beta_ssim_gan.npy')
-        # fred_distances = np.load('comparison/temp/beta_dis_fred.npy')
-        # fred_ssims = np.load('comparison/temp/beta_ssim_fred.npy')
+        # gan_distances = np.load('comparison/temp/beta_dis_gan_aiden_aux_others.npy')
+        # acc = np.load('comparison/temp/beta_acc_aiden_letters.npy')
+        # gan_ssims = np.load('comparison/temp/beta_ssim_gan_aiden_aux_others.npy')
+        # fred_distances = np.load('comparison/temp/beta_dis_fred_aiden_aux_others.npy')
+        # fred_ssims = np.load('comparison/temp/beta_ssim_fred_aiden_aux_others.npy')
         plt.close()
         plt.plot(betas, gan_distances, label='gan_distances')
         plt.plot(betas, fred_distances, label='fred_distances')
