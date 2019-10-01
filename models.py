@@ -90,7 +90,46 @@ class Classifier(object):
         # out = tf.nn.softmax(tf.matmul(linear1, self.linear_w2) + self.linear_b2)
         out = tf.nn.softmax(tf.matmul(x, self.linear_w1) + self.linear_b1)
         return out
-    
+
+class CNN_Classifier(object):
+    def __init__(self, NUM_LABEL, x_dim):
+        NUM_CHANNEL = 1 # Black white image
+        FILTER_SIZE = 5 # Use 5x5 filter for all conv layer
+        DEPTH_1 = 32 # num output feature maps for first layer
+        DEPTH_2 = 64
+        HIDDEN_UNIT = 1024
+        CONV_OUT = 7
+        self.NUM_LABEL = NUM_LABEL
+
+        self.conv_w1 = tf.Variable(glorot_init([FILTER_SIZE, FILTER_SIZE, NUM_CHANNEL, DEPTH_1]))
+        self.conv_w2 = tf.Variable(glorot_init([FILTER_SIZE, FILTER_SIZE, DEPTH_1, DEPTH_2]))
+        self.conv_b1 = tf.Variable(tf.constant(0.1, shape=[DEPTH_1]), name='b1') # Why initialize to 0.1?
+        self.conv_b2 = tf.Variable(tf.constant(0.1, shape=[DEPTH_2]), name='b2')
+
+        self.full_w = tf.Variable(glorot_init([CONV_OUT*CONV_OUT*DEPTH_2, HIDDEN_UNIT]))
+        self.full_b = tf.Variable(tf.constant(0.1, shape=[HIDDEN_UNIT]), name='full_b')
+
+        self.out_w = tf.Variable(glorot_init([HIDDEN_UNIT,self.NUM_LABEL]))
+        self.out_b = tf.Variable(tf.constant(0.1, shape=[self.NUM_LABEL]), name='out_b')
+
+    def __call__(self,x):
+        # First Conv Layer with relu activation and max pool
+        conv_xw1 = tf.nn.conv2d(x_in,conv_w1,strides=[1, 1, 1, 1], padding='SAME')
+        conv_z1 = tf.nn.relu(conv_xw1 + conv_b1)
+        conv_out1 = tf.nn.max_pool(conv_z1, ksize=[1, 2, 2, 1],strides=[1, 2, 2, 1], padding='SAME')
+
+        # Second Conv Layer with relu activation and max pool
+        conv_xw2 = tf.nn.conv2d(conv_out1, conv_w2,strides=[1, 1, 1, 1], padding='SAME')
+        conv_z2 = tf.nn.relu(conv_xw2 + conv_b2)
+        conv_out2 = tf.nn.max_pool(conv_z2, ksize=[1, 2, 2, 1],strides=[1, 2, 2, 1], padding='SAME')
+        conv_out2_flat = tf.reshape(conv_out2, [-1, 7*7*64])
+        # Fully Connected Layer with Relu Activation
+        full_out = tf.nn.relu(tf.matmul(conv_out2_flat, full_w) + full_b)
+
+        # Output Layer
+        y_ml = tf.nn.softmax(tf.matmul(full_out, out_w) + out_b)
+        return y_ml
+
 def lrelu(x, alpha):
     return tf.nn.relu(x) - alpha * tf.nn.relu(-x)
 
@@ -123,3 +162,4 @@ class Inverter_Regularizer(object):
         out_layer = tf.add(tf.matmul(rect, self.w_out), self.b_out)
         rect = lrelu(out_layer, 0.3)
         return rect
+

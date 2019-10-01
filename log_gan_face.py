@@ -397,6 +397,7 @@ if __name__ == '__main__':
         distances, ssims = train(betas, l2_coef, test, load_m)
 
     elif test == 'others':
+        print('train log_gan_face others')
         betas = [0, 5, 10, 20, 30, 40, 60, 70, 80, 90, 100, 120]
         l2_coef = 0.0001
 

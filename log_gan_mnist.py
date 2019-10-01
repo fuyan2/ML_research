@@ -413,7 +413,7 @@ def train(beta, model_l2, test, load_model):
 
 if __name__ == '__main__':
     test = sys.argv[1]
-    
+    print('train log_gan_mist '+test)
     if test == 'l1': 
         # beta = 0
         l1_coef = [0, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1]
