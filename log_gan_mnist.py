@@ -39,7 +39,7 @@ NUM_LABEL = 10 #10
 GAN_CLASS_COE = 100 #10
 gan_batch_size = 1000
 num_data = 10000
-INV_HIDDEN = 100 #5000
+INV_HIDDEN = 50000 #100
 beta = 0 #1, 0.5
 model_l2 = 0 #0.0001 
 wasserstein = True
@@ -119,7 +119,7 @@ correct = tf.equal(tf.argmax(y_ml, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
 # Build Optimizer !Use model_loss
-inverter_optimizer = tf.train.AdamOptimizer(0.001).minimize(inv_loss, var_list=[inverter.w_model, inverter.w_label, inverter.w_out, inverter.b_in, inverter.b_out])
+inverter_optimizer = tf.train.GradientDescentOptimizer(0.1).minimize(inv_loss, var_list=[inverter.w_model, inverter.w_label, inverter.w_out, inverter.b_in, inverter.b_out])
 grad_model = tf.gradients(class_loss, [model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
 
 #################### Build GAN Networks ############################
@@ -183,7 +183,7 @@ def wgan_grad_pen(batch_size,x,label, G_sample):
     return lam*grad_pen
 
 if wasserstein:
-    gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss + 1. * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
+    gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss #+ 1. * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
     # gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights)
     disc_loss = -tf.reduce_mean(similarity*(disc_real - disc_fake)) #+ wgan_grad_pen(gan_batch_size,aux_x, aux_label, gen_sample)
     clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in disc_vars] #0.01!
@@ -311,7 +311,7 @@ def train(beta, model_l2, test, load_model):
         print("beta is %.4f, l2 coe is %.4f"%(beta, model_l2))
         model_loss = class_loss - beta * inv_loss + model_l2*tf.nn.l2_loss(model_weights)
     
-    model_optimizer = tf.train.AdamOptimizer(0.001).minimize(model_loss, var_list=[model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
+    model_optimizer = tf.train.GradientDescentOptimizer(0.1).minimize(model_loss, var_list=[model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
 
     # Initialize the variables (i.e. assign their default value)
     init = tf.global_variables_initializer()
@@ -332,7 +332,7 @@ def train(beta, model_l2, test, load_model):
                 test_acc = sess.run([accuracy], feed_dict={x: digits_x_test, y: digits_y_test_one_hot})
             else:
                 sess.run(iterator.initializer, feed_dict = {features: digits_x_train, labels: y_train_one_hot, batch_size: gan_batch_size, sample_size: 60000})
-                for i in range(15000):
+                for i in range(20000):
                     batch = sess.run(next_batch)
                     model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
                     inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
@@ -529,8 +529,8 @@ if __name__ == '__main__':
         plt.savefig('comparison/aux_vs_ssim0.png')
 
     elif test == 'letters':
-        betas = [0, 5, 10, 20, 30, 40, 60, 70, 80, 90, 100, 120]
-        # betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
+        # betas = [0, 5, 10, 20, 30, 40, 60, 70, 80, 90, 100, 120]
+        betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
         l2_coef = 0.0001
         # Use letters as aux
         load_m = False
@@ -600,8 +600,8 @@ if __name__ == '__main__':
         distances, ssims = train(betas, l2_coef, test, load_m)
 
     elif test == 'beta':
-        betas = [0, 5, 10, 20, 30, 40, 60, 70, 80, 90, 100, 120]
-        # betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
+        # betas = [0, 5, 10, 20, 30, 40, 60, 70, 80, 100, 120]
+        betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
         l2_coef = 0.0001
         # Use letters as aux
         load_m = False
