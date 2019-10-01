@@ -183,7 +183,7 @@ def wgan_grad_pen(batch_size,x,label, G_sample):
     return lam*grad_pen
 
 if wasserstein:
-    gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss #+ 1. * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
+    gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
     # gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights)
     disc_loss = -tf.reduce_mean(similarity*(disc_real - disc_fake)) #+ wgan_grad_pen(gan_batch_size,aux_x, aux_label, gen_sample)
     clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in disc_vars] #0.01!
@@ -220,8 +220,8 @@ def fred_mi(i, y_conv, sess, iterate):
     cost_x = 1 - tf.squeeze(tf.gather(y_conv, i, axis=1), 0)
     gradient_of_cost = tf.gradients(cost_x, x)
     x_inv = x - tf.scalar_mul(LAMBDA, tf.squeeze(gradient_of_cost, 0))
-    # x_mi = np.zeros((1, x_dim))
-    x_mi = np.reshape(avg_digit_img,(1,x_dim))
+    x_mi = np.zeros((1, x_dim))
+    # x_mi = np.reshape(avg_digit_img,(1,x_dim))
     previous_costs = [inf,inf,inf,inf,inf]
 
     for i in range(ALPHA):
