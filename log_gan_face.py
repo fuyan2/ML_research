@@ -9,9 +9,9 @@ from skimage.measure import compare_ssim
 from models import *
 from utils import *
 from snwgan import snw_Generator, snw_Discriminator
-from sklearn.datasets import fetch_olivetti_faces
-from sklearn.cluster import MiniBatchKMeans
-from sklearn import decomposition
+# from sklearn.datasets import fetch_olivetti_faces
+# from sklearn.cluster import MiniBatchKMeans
+# from sklearn import decomposition
 import os
 from os.path import join
 
