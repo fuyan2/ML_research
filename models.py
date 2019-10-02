@@ -114,7 +114,7 @@ class CNN_Classifier(object):
 
     def __call__(self,x):
         # First Conv Layer with relu activation and max pool
-        conv_xw1 = tf.nn.conv2d(x_in,conv_w1,strides=[1, 1, 1, 1], padding='SAME')
+        conv_xw1 = tf.nn.conv2d(x,conv_w1,strides=[1, 1, 1, 1], padding='SAME')
         conv_z1 = tf.nn.relu(conv_xw1 + conv_b1)
         conv_out1 = tf.nn.max_pool(conv_z1, ksize=[1, 2, 2, 1],strides=[1, 2, 2, 1], padding='SAME')
 
