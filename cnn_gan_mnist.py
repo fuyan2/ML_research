@@ -319,11 +319,11 @@ def train(beta, model_l2, test, load_model):
                 if i % 5 == 0:
                     train_gen.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
 
-                if i % 2000 == 0:
+                if i % 10000 == 0:
                     gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
                     print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f, Classification loss: %f' % (i, gl, dl, cl))
 
-                    inverted_xs = plot_gan_image('comparison/gan/gan_out'+test+'iter', str(i), sess)
+                    inverted_xs = plot_gan_image('comparison/gan/cnn_gan_mnist/gan_out'+test+'iter', str(i), sess)
 
             inverted_xs = plot_gan_image('comparison/gan/gan_out',str(60000), sess)
             ssims = np.zeros(NUM_LABEL)

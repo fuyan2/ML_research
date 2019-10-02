@@ -319,7 +319,7 @@ def train(beta, model_l2, test, load_model):
 
                     inverted_xs = plot_gan_image('comparison/gan/gan_out'+test+'iter', str(i), sess)
 
-            inverted_xs = plot_gan_image('comparison/gan/gan_out',str(120000), sess)
+            inverted_xs = plot_gan_image('comparison/gan/log_gan_face/gan_out',str(120000), sess)
             ssims = np.zeros(NUM_LABEL)
             for i in range(NUM_LABEL):
                 ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (xrow, xcol)), np.reshape(inverted_xs[i], (xrow, xcol)), data_range=1.0 - 0.0)
