@@ -39,7 +39,7 @@ NUM_LABEL = 10 #10
 GAN_CLASS_COE = 100 #10
 gan_batch_size = 1000
 num_data = 10000
-INV_HIDDEN = 5000 #100
+INV_HIDDEN = 200 #100
 beta = 0 #1, 0.5
 model_l2 = 0 #0.0001 
 wasserstein = True
@@ -119,7 +119,7 @@ correct = tf.equal(tf.argmax(y_ml, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
 # Build Optimizer !Use model_loss
-inverter_optimizer = tf.train.GradientDescentOptimizer(0.1).minimize(inv_loss, var_list=[inverter.w_model, inverter.w_label, inverter.w_out, inverter.b_in, inverter.b_out])
+inverter_optimizer = tf.train.AdamOptimizer(0.001).minimize(inv_loss, var_list=[inverter.w_model, inverter.w_label, inverter.w_out, inverter.b_in, inverter.b_out])
 grad_model = tf.gradients(class_loss, [model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
 
 #################### Build GAN Networks ############################
@@ -311,7 +311,7 @@ def train(beta, model_l2, test, load_model):
         print("beta is %.4f, l2 coe is %.4f"%(beta, model_l2))
         model_loss = class_loss - beta * inv_loss + model_l2*tf.nn.l2_loss(model_weights)
     
-    model_optimizer = tf.train.GradientDescentOptimizer(0.1).minimize(model_loss, var_list=[model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
+    model_optimizer = tf.train.AdamOptimizer(0.001).minimize(model_loss, var_list=[model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
 
     # Initialize the variables (i.e. assign their default value)
     init = tf.global_variables_initializer()
@@ -380,7 +380,7 @@ def train(beta, model_l2, test, load_model):
                 if i % 5 == 0:
                     train_gen.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
 
-                if i % 2000 == 0:
+                if i % 10000 == 0:
                     gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
                     print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f, Classification loss: %f' % (i, gl, dl, cl))
 
@@ -529,8 +529,7 @@ if __name__ == '__main__':
         plt.savefig('comparison/aux_vs_ssim0.png')
 
     elif test == 'letters':
-        # betas = [0, 5, 10, 20, 30, 40, 60, 70, 80, 90, 100, 120]
-        betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
+        betas = [0, 5, 10, 20, 40, 60, 80, 100, 120, 140, 160, 200]
         l2_coef = 0.0001
         # Use letters as aux
         load_m = False
@@ -565,20 +564,20 @@ if __name__ == '__main__':
         plt.xlabel('model beta coefficient')
         plt.ylabel('sq distance between mi and avg')
         plt.legend(loc='best')
-        plt.savefig('comparison/beta_vs_sq_dis_aiden_avgimg_aux_letters.png')
+        plt.savefig('comparison/beta_vs_sq_dis_aiden_avgimg_aux_letters3.png')
         plt.close()
         plt.plot(betas, acc)
         plt.xlabel('model beta coefficient')
         plt.ylabel('accuracy')
         plt.legend(loc='best')
-        plt.savefig('comparison/beta_vs_accuracy_aiden_avgimg_aux_letters.png')
+        plt.savefig('comparison/beta_vs_accuracy_aiden_avgimg_aux_letters3.png')
         plt.close()
         plt.plot(betas, gan_ssims, label='gan_ssims')
         plt.plot(betas, fred_ssims, label='fred_ssims')
         plt.xlabel('model beta coefficient')
         plt.ylabel('ssim between mi and avg')
         plt.legend(loc='best')
-        plt.savefig('comparison/beta_vs_ssims_aiden_avgimg_aux_letters.png')
+        plt.savefig('comparison/beta_vs_ssims_aiden_avgimg_aux_letters3.png')
 
     elif test == 'avg_img':
         betas = 0
@@ -600,8 +599,7 @@ if __name__ == '__main__':
         distances, ssims = train(betas, l2_coef, test, load_m)
 
     elif test == 'beta':
-        # betas = [0, 5, 10, 20, 30, 40, 60, 70, 80, 100, 120]
-        betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
+        betas = [0, 5, 10, 20, 40, 60, 80, 100, 120, 140, 160]
         l2_coef = 0.0001
         # Use letters as aux
         load_m = False

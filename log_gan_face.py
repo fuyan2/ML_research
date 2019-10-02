@@ -1,6 +1,8 @@
 # Only train on first 20 people to reduce classifier dimensionality
 # Use the rest of 20 people as auxiliary image
 
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.image
 import numpy as np
@@ -311,7 +313,7 @@ def train(beta, model_l2, test, load_model):
                 train_disc.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
                 if i % 5 == 0:
                     train_gen.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
-                if i % 2000 == 0:
+                if i % 10000 == 0:
                     gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
                     print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f, Classification loss: %f' % (i, gl, dl, cl))
 
