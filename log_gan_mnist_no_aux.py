@@ -21,7 +21,7 @@ import tensorflow as tf
 import random
 import math
 from skimage.measure import compare_ssim
-from models import *
+from tf_models import *
 from utils import *
 from snwgan import snw_Generator, snw_Discriminator, cnn_Discriminator
 inf = 1e9
@@ -194,23 +194,6 @@ else:
     disc_loss = -tf.reduce_mean(similarity*(tf.log(tf.maximum(0.0000001, disc_real)) + tf.log(tf.maximum(0.0000001, 1. - disc_fake)))) 
     train_gen = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(gen_loss, var_list=gen_vars)
     train_disc = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(disc_loss, var_list=disc_vars)
-    
-################### Build The NN Attacker ####################
-# target_y = tf.placeholder(tf.float32, shape=[None, NUM_LABEL])
-# aux_avai = 0
-# if aux_avai:
-#     target_x = tf.placeholder(tf.float32, shape=[None, x_dim])
-#     nn_attac = NN_aux_attacker(NUM_LABEL)
-#     nn_x = nn_attac(target_y, target_x)
-# else:
-#     nn_attac = NN_attacker(NUM_LABEL)
-#     nn_x = nn_attac(target_y)
-
-# nn_y = model(nn_x)
-# nn_vars = [nn_attac.linear_w1, nn_attac.linear_b1, nn_attac.linear_w2, nn_attac.linear_b2, nn_attac.linear_w3, nn_attac.linear_b3]
-# nn_weights = tf.concat([tf.reshape(nn_attac.linear_w1,[1, -1]), tf.reshape(nn_attac.linear_b1,[1, -1]), tf.reshape(nn_attac.linear_w2,[1, -1]), tf.reshape(nn_attac.linear_b2,[1, -1]), tf.reshape(nn_attac.linear_w3,[1, -1]), tf.reshape(nn_attac.linear_b3,[1, -1])], 1)
-# nn_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=target_y, logits=nn_y)) + 0.01 * tf.nn.l2_loss(nn_weights)
-# train_nn = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(nn_loss, var_list=nn_vars)
 
 # Fredrickson Model Inversion Attack, Gradient Attack
 def fred_mi(i, y_conv, sess, iterate):
@@ -560,9 +543,10 @@ if __name__ == '__main__':
         distances, ssims = train(betas, l2_coef, test, load_m)
 
     elif test == 'beta':
+        # betas = [0, 5, 10, 20, 30, 40, 60, 80, 100]
         betas = [0, 5, 10, 20, 30, 40, 60, 70, 80, 90, 100, 120]
         # betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
-        l2_coef = 0.0001
+        l2_coef = 0.001
         # Use letters as aux
         load_m = False
         # aux_x_data = letters_x_train
@@ -572,46 +556,46 @@ if __name__ == '__main__':
         # # aux_y_data = aux_y_data[:aux_x_data.shape[0], :]
         
         #Both gan and fred use avg image as starting point, 
-        aux_x_data = np.repeat(np.reshape(avg_digit_img,[1,x_dim]),digits_y_train.shape[0], axis=0)
-        aux_y_data = digits_y_train
-        aux_y_data = one_hot(digits_y_train, 10)
+        # aux_x_data = np.repeat(np.reshape(avg_digit_img,[1,x_dim]),digits_y_train.shape[0], axis=0)
+        # aux_y_data = digits_y_train
+        # aux_y_data = one_hot(digits_y_train, 10)
 
-        gan_distances = np.zeros(len(betas))
-        gan_ssims = np.zeros(len(betas))
-        acc = np.zeros(len(betas))
-        fred_distances = np.zeros(len(betas))
-        fred_ssims = np.zeros(len(betas))
-        i = 0
-        for beta in betas:
-            acc[i], gan_distances[i], gan_ssims[i], fred_distances[i], fred_ssims[i] = train(beta, l2_coef, test+str(beta), load_m)    
-            i += 1
-        np.save('comparison/temp/beta_dis_gan_no_aux', gan_distances)
-        np.save('comparison/temp/beta_acc_no_aux', acc)
-        np.save('comparison/temp/beta_ssim_gan_no_aux', gan_ssims)
-        np.save('comparison/temp/beta_dis_fred_no_aux', fred_distances)
-        np.save('comparison/temp/beta_ssim_fred_no_aux', fred_ssims)
-        # gan_distances = np.load('comparison/temp/beta_dis_gan.npy')
-        # acc = np.load('comparison/temp/beta_acc.npy')
-        # gan_ssims = np.load('comparison/temp/beta_ssim_gan.npy')
-        # fred_distances = np.load('comparison/temp/beta_dis_fred.npy')
-        # fred_ssims = np.load('comparison/temp/beta_ssim_fred.npy')
+        # gan_distances = np.zeros(len(betas))
+        # gan_ssims = np.zeros(len(betas))
+        # acc = np.zeros(len(betas))
+        # fred_distances = np.zeros(len(betas))
+        # fred_ssims = np.zeros(len(betas))
+        # i = 0
+        # for beta in betas:
+        #     acc[i], gan_distances[i], gan_ssims[i], fred_distances[i], fred_ssims[i] = train(beta, l2_coef, test+str(beta), load_m)    
+        #     i += 1
+        # np.save('comparison/temp/beta_dis_gan_no_aux', gan_distances)
+        # np.save('comparison/temp/beta_acc_no_aux', acc)
+        # np.save('comparison/temp/beta_ssim_gan_no_aux', gan_ssims)
+        # np.save('comparison/temp/beta_dis_fred_no_aux', fred_distances)
+        # np.save('comparison/temp/beta_ssim_fred_no_aux', fred_ssims)
+        gan_distances = np.load('comparison/temp/beta_dis_gan_no_aux.npy')
+        acc = np.load('comparison/temp/beta_acc_no_aux.npy')
+        gan_ssims = np.load('comparison/temp/beta_ssim_gan_no_aux.npy')
+        fred_distances = np.load('comparison/temp/beta_dis_fred_no_aux.npy')
+        fred_ssims = np.load('comparison/temp/beta_ssim_fred_no_aux.npy')
         plt.close()
         plt.plot(betas, gan_distances, label='gan_distances')
         plt.plot(betas, fred_distances, label='fred_distances')
         plt.xlabel('model beta coefficient')
         plt.ylabel('sq distance between mi and avg')
         plt.legend(loc='best')
-        plt.savefig('comparison/beta_vs_sq_dis_NO_aux.png')
+        plt.savefig('comparison/beta_vs_sq_dis_NO_aux2.png')
         plt.close()
         plt.plot(betas, acc)
         plt.xlabel('model beta coefficient')
         plt.ylabel('accuracy')
         plt.legend(loc='best')
-        plt.savefig('comparison/beta_vs_accuracy_NO_aux.png')
+        plt.savefig('comparison/beta_vs_accuracy_NO_aux2.png')
         plt.close()
         plt.plot(betas, gan_ssims, label='gan_ssims')
         plt.plot(betas, fred_ssims, label='fred_ssims')
         plt.xlabel('model beta coefficient')
         plt.ylabel('ssim between mi and avg')
         plt.legend(loc='best')
-        plt.savefig('comparison/beta_vs_ssims_NO_aux.png')
+        plt.savefig('comparison/beta_vs_ssims_NO_aux2.png')

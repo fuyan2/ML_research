@@ -8,13 +8,14 @@ import matplotlib.image
 import numpy as np
 import tensorflow as tf
 from skimage.measure import compare_ssim
-from models import *
+from tf_models import *
 from utils import *
 from snwgan import snw_Generator, snw_Discriminator
 # from sklearn.datasets import fetch_olivetti_faces
 # from sklearn.cluster import MiniBatchKMeans
 # from sklearn import decomposition
 import os
+import sys
 from os.path import join
 
 inf = 1e9

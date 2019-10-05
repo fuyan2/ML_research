@@ -50,40 +50,7 @@ class snw_Generator:
     deconv_h2 = tf.nn.leaky_relu(xw2_norm)
     deconv_xw3 = tf.nn.conv2d_transpose(deconv_h2, self.deconv_w3,output_shape=[self.batch_size,28,28,1], strides=[1, 1, 1, 1])
     # out_layer = tf.nn.sigmoid(deconv_xw3)
-    # out_layer = tf.nn.tanh(deconv_xw3)
-    return deconv_xw3
-
-class snw_Generator_Face:
-  # Generator Parameters
-  def __init__(self, noise_dim, NUM_LABEL, batch_size):
-    self.batch_size = batch_size
-    self.linear_w = tf.Variable(glorot_init([noise_dim+NUM_LABEL, 7*7*256]),name='glw')
-    self.linear_b = tf.Variable(glorot_init([7*7*256]),name='glb')
-
-    self.deconv_w1 = tf.Variable(glorot_init([4, 4, 128, 256]),name='gdw1')
-    self.deconv_w2 = tf.Variable(glorot_init([4, 4, 64, 128]),name='gdw2')
-    self.deconv_w3 = tf.Variable(glorot_init([3, 3, 1, 64]),name='gdw3')
-
-    # self.deconv_b1 = tf.Variable(tf.constant(0.1, shape=[128]), name='gb1')
-    # self.deconv_b2 = tf.Variable(tf.constant(0.1, shape=[64]), name='gb2')
-    # self.deconv_b3 = tf.Variable(tf.constant(0.1, shape=[1]), name='gb3')
-
-    self.training = True
-
- # Build Generator Graph
-  def __call__(self, z,y):
-    z_y = tf.concat([z,y],1)
-    linear_h = tf.matmul(z_y,self.linear_w)+self.linear_b
-    linear_h_reshape = tf.reshape(linear_h , [-1,7, 7,256])  
-    deconv_xw1 = tf.nn.conv2d_transpose(linear_h_reshape, self.deconv_w1,output_shape=[self.batch_size,14,14,128], strides=[1, 2, 2, 1])
-    xw1_norm = tf.layers.batch_normalization(deconv_xw1, training=self.training)
-    deconv_h1 = tf.nn.leaky_relu(xw1_norm )
-    deconv_xw2 = tf.nn.conv2d_transpose(deconv_h1, self.deconv_w2,output_shape=[self.batch_size,28,28,64], strides=[1, 2, 2, 1])
-    xw2_norm = tf.layers.batch_normalization(deconv_xw2, training=self.training)
-    deconv_h2 = tf.nn.leaky_relu(xw2_norm)
-    deconv_xw3 = tf.nn.conv2d_transpose(deconv_h2, self.deconv_w3,output_shape=[self.batch_size,28,28,1], strides=[1, 1, 1, 1])
-    out_layer = tf.nn.sigmoid(deconv_xw3)
-    # out_layer = tf.nn.tanh(deconv_xw3)
+    out_layer = tf.nn.tanh(deconv_xw3)
     return out_layer
 
 class cnn_Discriminator:

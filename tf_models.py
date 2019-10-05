@@ -114,20 +114,20 @@ class CNN_Classifier(object):
 
     def __call__(self,x):
         # First Conv Layer with relu activation and max pool
-        conv_xw1 = tf.nn.conv2d(x,conv_w1,strides=[1, 1, 1, 1], padding='SAME')
-        conv_z1 = tf.nn.relu(conv_xw1 + conv_b1)
+        conv_xw1 = tf.nn.conv2d(x,self.conv_w1,strides=[1, 1, 1, 1], padding='SAME')
+        conv_z1 = tf.nn.relu(conv_xw1 + self.conv_b1)
         conv_out1 = tf.nn.max_pool(conv_z1, ksize=[1, 2, 2, 1],strides=[1, 2, 2, 1], padding='SAME')
 
         # Second Conv Layer with relu activation and max pool
-        conv_xw2 = tf.nn.conv2d(conv_out1, conv_w2,strides=[1, 1, 1, 1], padding='SAME')
-        conv_z2 = tf.nn.relu(conv_xw2 + conv_b2)
+        conv_xw2 = tf.nn.conv2d(conv_out1, self.conv_w2,strides=[1, 1, 1, 1], padding='SAME')
+        conv_z2 = tf.nn.relu(conv_xw2 + self.conv_b2)
         conv_out2 = tf.nn.max_pool(conv_z2, ksize=[1, 2, 2, 1],strides=[1, 2, 2, 1], padding='SAME')
         conv_out2_flat = tf.reshape(conv_out2, [-1, 7*7*64])
         # Fully Connected Layer with Relu Activation
-        full_out = tf.nn.relu(tf.matmul(conv_out2_flat, full_w) + full_b)
+        full_out = tf.nn.relu(tf.matmul(conv_out2_flat, self.full_w) + self.full_b)
 
         # Output Layer
-        y_ml = tf.nn.softmax(tf.matmul(full_out, out_w) + out_b)
+        y_ml = tf.nn.softmax(tf.matmul(full_out, self.out_w) + self.out_b)
         return y_ml
 
 def lrelu(x, alpha):

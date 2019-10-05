@@ -13,7 +13,7 @@ import tensorflow as tf
 import random
 import math
 from skimage.measure import compare_ssim
-from models import *
+from tf_models import *
 from utils import *
 from snwgan import snw_Generator, snw_Discriminator, cnn_Discriminator
 inf = 1e9
@@ -28,7 +28,7 @@ IMG_ROWS = 28
 IMG_COLS = 28
 NUM_LABEL = 10 #10
 GAN_CLASS_COE = 100 #10
-gan_batch_size = 100
+gan_batch_size = 500
 num_data = 10000
 INV_HIDDEN = 100 #5000
 beta = 0 #1, 0.5
@@ -84,9 +84,9 @@ x_unflat = tf.reshape(x , [-1,IMG_ROWS, IMG_ROWS,1])
 y = tf.placeholder(tf.float32, shape=[None, NUM_LABEL])
 model = CNN_Classifier(NUM_LABEL, x_dim)
 y_ml = model(x_unflat)
-
+model_var = [model.conv_w1, model.conv_w2, model.conv_b1, model.conv_b2, model.full_w, model.full_b, model.out_w, model.out_b]
 #Build Inverter Regularizer
-model_weights = tf.concat([tf.reshape(model.out_w,[1, -1]),tf.reshape(model.out_b,[1, -1])], 1)
+model_weights = tf.concat([tf.reshape(model.conv_w1,[1, -1]), tf.reshape(model.conv_w2,[1, -1]), tf.reshape(model.conv_b1,[1, -1]), tf.reshape(model.conv_b2,[1, -1]), tf.reshape(model.full_w,[1, -1]), tf.reshape(model.full_b,[1, -1]), tf.reshape(model.out_w,[1, -1]),tf.reshape(model.out_b,[1, -1])], 1)
 weight_shape = int(model_weights.shape[1])
 inverter = Inverter_Regularizer(NUM_LABEL, x_dim, weight_shape, INV_HIDDEN)
 avg_digit_img_inv = tf.constant(avg_digit_img, dtype=tf.float32)
@@ -106,7 +106,6 @@ accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
 # Build Optimizer !Use model_loss
 inverter_optimizer = tf.train.AdamOptimizer(0.001).minimize(inv_loss, var_list=[inverter.w_model, inverter.w_label, inverter.w_out, inverter.b_in, inverter.b_out])
-grad_model = tf.gradients(class_loss, [model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
 
 #################### Build GAN Networks ############################
 # Network Inputs
@@ -239,7 +238,7 @@ def plot_gan_image(name, epoch, sess):
 # beta = 0
 # model_l2 = 0.001
 # model_loss = class_loss - beta * inv_loss + model_l2*tf.nn.l2_loss(model_weights)    
-# model_optimizer = tf.train.AdamOptimizer(0.001).minimize(model_loss, var_list=[model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
+# model_optimizer = tf.train.AdamOptimizer(0.001).minimize(model_loss, var_list=model_var)
 
 def train(beta, model_l2, test, load_model):
     # Train Classifier
@@ -250,7 +249,7 @@ def train(beta, model_l2, test, load_model):
         print("beta is %.4f, l2 coe is %.4f"%(beta, model_l2))
         model_loss = class_loss - beta * inv_loss + model_l2*tf.nn.l2_loss(model_weights)
     
-    model_optimizer = tf.train.AdamOptimizer(0.001).minimize(model_loss, var_list=[model.linear_w1, model.linear_b1])#, model.linear_w2, model.linear_b2])
+    model_optimizer = tf.train.AdamOptimizer(0.001).minimize(model_loss, var_list=model_var)
 
     # Initialize the variables (i.e. assign their default value)
     init = tf.global_variables_initializer()
