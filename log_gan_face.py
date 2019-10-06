@@ -403,7 +403,8 @@ if __name__ == '__main__':
         print('train log_gan_face others')
         betas = [0, 5, 10, 20, 30, 40, 60, 70, 80, 90, 100, 120]
         l2_coef = 0.0001
-
+        load_m = False
+        
         # Use other people as aux    
         aux_x_data = orl_x_aux
         aux_y_data = orl_y_train
