@@ -267,7 +267,7 @@ def train(beta, model_l2, test, load_model):
             if load_model:
                 saver.restore(sess, 'tmp/mnist_model_beta%d.ckpt'%beta)
                 print("Classifier Model restored.")
-                test_acc = sess.run([accuracy], feed_dict={x: digits_x_test[:200,:], y: digits_y_test_one_hot})
+                test_acc = sess.run([accuracy], feed_dict={x: digits_x_test[:200,:], y: digits_y_test_one_hot[:200,:]})
             else:
                 sess.run(iterator.initializer, feed_dict = {features: digits_x_train, labels: y_train_one_hot, batch_size: gan_batch_size, sample_size: 60000})
                 for i in range(15000):
@@ -280,7 +280,7 @@ def train(beta, model_l2, test, load_model):
                         # print('Epoch %d, training accuracy %g, test_accuracy %g' % (i, train_accuracy, test_accuracy))       
                         print('Epoch %d, training accuracy %g' % (i, train_accuracy))       
 
-                test_acc = sess.run(accuracy, feed_dict={x: digits_x_test[:200,:], y: y_test_one_hot})
+                test_acc = sess.run(accuracy, feed_dict={x: digits_x_test[:200,:], y: y_test_one_hot[:200,:]})
                 print("test acc:", test_acc)
                 save_path = saver.save(sess, 'tmp/mnist_model_beta%d.ckpt'%beta)
                 print("Model saved in path: %s" % save_path)
