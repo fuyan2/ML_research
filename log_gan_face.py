@@ -225,8 +225,8 @@ def plot_gan_image(name, epoch, sess):
         avg_g = np.where(avg_g>1, 1, avg_g)
 
         # for j in range(2):
-        row = i//4
-        col = i%4
+        row = i//5
+        col = i%5
         ax[row][col].imshow(np.reshape(avg_g,(xrow, xcol)), cmap="gray", origin='lower')
 
     plt.savefig(name+epoch+'.png')
@@ -284,7 +284,7 @@ def train(beta, model_l2, test, load_model):
                 print("Model saved in path: %s" % save_path)
 
             # Train Fredrickson MI
-            fig, ax = plt.subplots(6,5)
+            fig, ax = plt.subplots(4,5)
             inverted_xs = np.zeros((NUM_LABEL, x_dim))
             ssims = np.zeros(NUM_LABEL)
             for i in range(NUM_LABEL):
@@ -404,7 +404,7 @@ if __name__ == '__main__':
         betas = [0, 5, 10, 20, 30, 40, 60, 70, 80, 90, 100, 120]
         l2_coef = 0.0001
         load_m = False
-        
+
         # Use other people as aux    
         aux_x_data = orl_x_aux
         aux_y_data = orl_y_train
