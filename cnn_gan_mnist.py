@@ -34,7 +34,7 @@ INV_HIDDEN = 100 #5000
 beta = 0 #1, 0.5
 model_l2 = 0 #0.0001 
 wasserstein = True
-cnn_gan = False
+cnn_gan = True
 inverter_take_avgimg = True
 #Fredrickson Params
 ALPHA = 20000
