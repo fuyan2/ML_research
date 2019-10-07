@@ -310,7 +310,7 @@ def train(beta, model_l2, test, load_model):
             # Train GAN
             # Initialize Aux dataset for GAN train
             sess.run(iterator.initializer, feed_dict = {features: aux_x_data, labels: aux_y_data, batch_size: gan_batch_size, sample_size: 40000})            
-            for i in range(60000):            
+            for i in range(600000):            
                 # Sample random noise 
                 batch = sess.run(next_batch)
                 z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
@@ -319,7 +319,7 @@ def train(beta, model_l2, test, load_model):
                 if i % 5 == 0:
                     train_gen.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
 
-                if i % 10000 == 0:
+                if i % 100000 == 0:
                     gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
                     print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f, Classification loss: %f' % (i, gl, dl, cl))
 
@@ -339,7 +339,8 @@ if __name__ == '__main__':
     test = sys.argv[1]
     print('train cnn_gan_mist '+test)
     if test == 'letters':
-        betas = [0, 5, 10, 20, 30, 40, 60, 70, 80, 90, 100, 120]
+        betas = [0, 120]
+        # betas = [0, 5, 10, 20, 30, 40, 60, 70, 80, 90, 100, 120]
         # betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
         l2_coef = 0.0001
         # Use letters as aux
