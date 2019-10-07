@@ -124,7 +124,7 @@ if cnn_gan:
     gen_sample = tf.reshape(gen_sample_unflat,[gan_batch_size, x_dim])
     gen_vars = [G.linear_w, G.linear_b, G.deconv_w1, G.deconv_w2, G.deconv_w3]
     gen_weights = tf.concat([tf.reshape(G.linear_w, [1, -1]), tf.reshape(G.linear_b, [1, -1]), tf.reshape(G.deconv_w1, [1, -1]), tf.reshape(G.deconv_w2, [1, -1]), tf.reshape(G.deconv_w3, [1, -1])], 1)
-    gen_label = model(gen_sample)
+    gen_label = model(gen_sample_unflat)
 
     # Build 2 D Networks (one from noise input, one from generated samples)
     D = cnn_Discriminator(NUM_LABEL) 
