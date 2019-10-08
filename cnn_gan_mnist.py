@@ -21,7 +21,7 @@ inf = 1e9
 
 # Training Params
 num_steps = 100000
-learning_rate = 0.00002 #0.00002
+learning_rate = 0.0002 #0.00002
 x_dim = 28*28
 noise_dim = 128 #20
 IMG_ROWS = 28
@@ -156,7 +156,7 @@ similarity = tf.reduce_sum(tf.multiply(aux_label, desired_label), 1, keepdims=Tr
 gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=desired_label, logits=gen_label))
 
 if wasserstein:
-    gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss + 1. * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
+    gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss #+ 1. * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
     # gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights)
     disc_loss = -tf.reduce_mean(similarity*(disc_real - disc_fake)) #+ wgan_grad_pen(gan_batch_size,aux_x, aux_label, gen_sample)
     clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in disc_vars] #0.01!
@@ -325,7 +325,7 @@ def train(beta, model_l2, test, load_model):
 
                     inverted_xs = plot_gan_image('comparison/gan/cnn_gan_mnist/gan_out'+test+'iter', str(i), sess)
 
-            inverted_xs = plot_gan_image('comparison/gan/gan_out',str(60000), sess)
+            inverted_xs = plot_gan_image('comparison/gan/gan_out',str(600000), sess)
             ssims = np.zeros(NUM_LABEL)
             for i in range(NUM_LABEL):
                 ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)
@@ -335,6 +335,7 @@ def train(beta, model_l2, test, load_model):
             gan_avg_ssim = np.mean(ssims)
 
             return test_acc, gan_avg_dis, gan_avg_ssim, fred_avg_dis, fred_avg_ssim
+
 if __name__ == '__main__':
     test = sys.argv[1]
     print('train cnn_gan_mist '+test)
