@@ -340,7 +340,7 @@ if __name__ == '__main__':
     test = sys.argv[1]
     print('train cnn_gan_mist '+test)
     if test == 'letters':
-        betas = [0, 120]
+        betas = [0]
         # betas = [0, 5, 10, 20, 30, 40, 60, 70, 80, 90, 100, 120]
         # betas = [0, 0.01, 0.1, 0.5, 1., 2., 5., 7., 10., 15., 20.]
         l2_coef = 0.0001
