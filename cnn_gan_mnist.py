@@ -159,9 +159,9 @@ if wasserstein:
     gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss #+ 1. * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
     # gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights)
     disc_loss = -tf.reduce_mean(similarity*(disc_real - disc_fake)) #+ wgan_grad_pen(gan_batch_size,aux_x, aux_label, gen_sample)
-    clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in disc_vars] #0.01!
-    train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(gen_loss, var_list=gen_vars)
-    train_disc = tf.train.RMSPropOptimizer(learning_rate=5e-5).minimize(disc_loss, var_list=disc_vars)
+    clip_D = [p.assign(tf.clip_by_value(p, -0.005, 0.005)) for p in disc_vars] #0.01!
+    train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-4).minimize(gen_loss, var_list=gen_vars)
+    train_disc = tf.train.RMSPropOptimizer(learning_rate=5e-4).minimize(disc_loss, var_list=disc_vars)
 else:  
     gen_loss = -tf.reduce_mean(tf.log(tf.maximum(0.00001, disc_fake))) + GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
     disc_loss = -tf.reduce_mean(similarity*(tf.log(tf.maximum(0.0000001, disc_real)) + tf.log(tf.maximum(0.0000001, 1. - disc_fake)))) 
@@ -265,7 +265,7 @@ def train(beta, model_l2, test, load_model):
 
             # Train the Classifier First
             if load_model:
-                saver.restore(sess, 'tmp/mnist_model_beta%d.ckpt'%beta)
+                saver.restore(sess, 'tmp/cnn_mnist_model_beta%d.ckpt'%beta)
                 print("Classifier Model restored.")
                 test_acc = sess.run([accuracy], feed_dict={x: digits_x_test[:200,:], y: digits_y_test_one_hot[:200,:]})
             else:
@@ -282,7 +282,7 @@ def train(beta, model_l2, test, load_model):
 
                 test_acc = sess.run(accuracy, feed_dict={x: digits_x_test[:200,:], y: y_test_one_hot[:200,:]})
                 print("test acc:", test_acc)
-                save_path = saver.save(sess, 'tmp/mnist_model_beta%d.ckpt'%beta)
+                save_path = saver.save(sess, 'tmp/cnn_mnist_model_beta%d.ckpt'%beta)
                 print("Model saved in path: %s" % save_path)
 
             # Train Fredrickson MI
@@ -310,7 +310,7 @@ def train(beta, model_l2, test, load_model):
             # Train GAN
             # Initialize Aux dataset for GAN train
             sess.run(iterator.initializer, feed_dict = {features: aux_x_data, labels: aux_y_data, batch_size: gan_batch_size, sample_size: 40000})            
-            for i in range(600000):            
+            for i in range(1000000):            
                 # Sample random noise 
                 batch = sess.run(next_batch)
                 z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
@@ -325,7 +325,7 @@ def train(beta, model_l2, test, load_model):
 
                     inverted_xs = plot_gan_image('comparison/gan/cnn_gan_mnist/gan_out'+test+'iter', str(i), sess)
 
-            inverted_xs = plot_gan_image('comparison/gan/gan_out',str(600000), sess)
+            inverted_xs = plot_gan_image('comparison/gan/gan_out',str(1000000), sess)
             ssims = np.zeros(NUM_LABEL)
             for i in range(NUM_LABEL):
                 ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)
