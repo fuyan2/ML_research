@@ -157,9 +157,8 @@ gan_class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(label
 
 if wasserstein:
     gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss #+ 1. * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
-    # gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights)
     disc_loss = -tf.reduce_mean(similarity*(disc_real - disc_fake)) #+ wgan_grad_pen(gan_batch_size,aux_x, aux_label, gen_sample)
-    clip_D = [p.assign(tf.clip_by_value(p, -0.005, 0.005)) for p in disc_vars] #0.01!
+    clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in disc_vars] #0.01!
     train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-4).minimize(gen_loss, var_list=gen_vars)
     train_disc = tf.train.RMSPropOptimizer(learning_rate=5e-4).minimize(disc_loss, var_list=disc_vars)
 else:  
@@ -315,9 +314,9 @@ def train(beta, model_l2, test, load_model):
                 batch = sess.run(next_batch)
                 z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
                 #! Train Discriminator
-                train_disc.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
-                if i % 5 == 0:
-                    train_gen.run(feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
+                train_disc.run(feed_dict={aux_x: batch[0], gen_input: z, desired_label: batch[1]})
+                # if i % 5 == 0:
+                train_gen.run(feed_dict={aux_x: batch[0], gen_input: z, desired_label: batch[1]})
 
                 if i % 100000 == 0:
                     gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
