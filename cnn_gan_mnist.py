@@ -28,7 +28,7 @@ IMG_ROWS = 28
 IMG_COLS = 28
 NUM_LABEL = 10 #10
 GAN_CLASS_COE = 100 #10
-gan_batch_size = 100
+gan_batch_size = 256
 num_data = 10000
 INV_HIDDEN = 100 #5000
 beta = 0 #1, 0.5
@@ -106,7 +106,7 @@ correct = tf.equal(tf.argmax(y_ml, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
 # Build Optimizer !Use model_loss
-model_optimizer = tf.train.AdamOptimizer(0.001).minimize(class_loss, var_list=model_var)
+model_optimizer = tf.train.AdamOptimizer(0.0001).minimize(class_loss, var_list=model_var)
 # inverter_optimizer = tf.train.AdamOptimizer(0.001).minimize(inv_loss, var_list=[inverter.w_model, inverter.w_label, inverter.w_out, inverter.b_in, inverter.b_out])
 
 #################### Build GAN Networks ############################
