@@ -35,7 +35,7 @@ beta = 0 #1, 0.5
 model_l2 = 0 #0.0001 
 wasserstein = True
 cnn_gan = True
-inverter_take_avgimg = True
+inverter_take_avgimg = False
 #Fredrickson Params
 ALPHA = 20000
 BETA = 5
@@ -86,26 +86,28 @@ model = CNN_Classifier(NUM_LABEL, x_dim)
 y_ml = model(x_unflat)
 model_var = [model.conv_w1, model.conv_w2, model.conv_b1, model.conv_b2, model.full_w, model.full_b, model.out_w, model.out_b]
 #Build Inverter Regularizer
-model_weights = tf.concat([tf.reshape(model.conv_w1,[1, -1]), tf.reshape(model.conv_w2,[1, -1]), tf.reshape(model.conv_b1,[1, -1]), tf.reshape(model.conv_b2,[1, -1]), tf.reshape(model.full_w,[1, -1]), tf.reshape(model.full_b,[1, -1]), tf.reshape(model.out_w,[1, -1]),tf.reshape(model.out_b,[1, -1])], 1)
-weight_shape = int(model_weights.shape[1])
-inverter = Inverter_Regularizer(NUM_LABEL, x_dim, weight_shape, INV_HIDDEN)
-avg_digit_img_inv = tf.constant(avg_digit_img, dtype=tf.float32)
-avg_digit_img_inv_reshape = tf.reshape(avg_digit_img_inv,[1,x_dim])
+# model_weights = tf.concat([tf.reshape(model.out_w,[1, -1]),tf.reshape(model.out_b,[1, -1])], 1)
+# weight_shape = int(model_weights.shape[1])
+# inverter = Inverter_Regularizer(NUM_LABEL, x_dim, weight_shape, INV_HIDDEN)
+# avg_digit_img_inv = tf.constant(avg_digit_img, dtype=tf.float32)
+# avg_digit_img_inv_reshape = tf.reshape(avg_digit_img_inv,[1,x_dim])
 
-if inverter_take_avgimg:
-    inv_x = inverter(y, model_weights, avg_digit_img_inv_reshape)
-else:
-    inv_x = inverter(y, model_weights, None)
+# if inverter_take_avgimg:
+#     inv_x = inverter(y, model_weights, avg_digit_img_inv_reshape)
+# else:
+#     inv_x = inverter(y, model_weights, None)
 
 # Calculate MODEL Loss
-inv_loss = tf.losses.mean_squared_error(labels=x, predictions=inv_x)
+# inv_loss = tf.losses.mean_squared_error(labels=x, predictions=inv_x)
 class_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(labels=y, logits=y_ml))
+# model_loss = class_loss - beta * inv_loss
 
 correct = tf.equal(tf.argmax(y_ml, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
 # Build Optimizer !Use model_loss
-inverter_optimizer = tf.train.AdamOptimizer(0.001).minimize(inv_loss, var_list=[inverter.w_model, inverter.w_label, inverter.w_out, inverter.b_in, inverter.b_out])
+model_optimizer = tf.train.AdamOptimizer(0.001).minimize(class_loss, var_list=model_var)
+# inverter_optimizer = tf.train.AdamOptimizer(0.001).minimize(inv_loss, var_list=[inverter.w_model, inverter.w_label, inverter.w_out, inverter.b_in, inverter.b_out])
 
 #################### Build GAN Networks ############################
 # Network Inputs
@@ -234,22 +236,7 @@ def plot_gan_image(name, epoch, sess):
     plt.close()
     return inverted_xs
 
-# beta = 0
-# model_l2 = 0.001
-# model_loss = class_loss - beta * inv_loss + model_l2*tf.nn.l2_loss(model_weights)    
-# model_optimizer = tf.train.AdamOptimizer(0.001).minimize(model_loss, var_list=model_var)
-
 def train(beta, model_l2, test, load_model):
-    # Train Classifier
-    if test == 'l1':
-        print("beta is %.4f, l1 coe is %.4f"%(beta, model_l2))
-        model_loss = class_loss - beta * inv_loss + model_l2*tf.norm(model_weights, ord=1)
-    else:
-        print("beta is %.4f, l2 coe is %.4f"%(beta, model_l2))
-        model_loss = class_loss - beta * inv_loss + model_l2*tf.nn.l2_loss(model_weights)
-    
-    model_optimizer = tf.train.AdamOptimizer(0.001).minimize(model_loss, var_list=model_var)
-
     # Initialize the variables (i.e. assign their default value)
     init = tf.global_variables_initializer()
     saver = tf.train.Saver()
@@ -272,11 +259,9 @@ def train(beta, model_l2, test, load_model):
                 for i in range(15000):
                     batch = sess.run(next_batch)
                     model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
-                    inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
+                    # inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
                     if i % 1000 == 0:
-                        train_accuracy = sess.run(accuracy, feed_dict={x: batch[0], y: batch[1] })
-                        # test_accuracy = sess.run(accuracy, feed_dict={x: digits_x_test[:100,:], y: y_test_one_hot })
-                        # print('Epoch %d, training accuracy %g, test_accuracy %g' % (i, train_accuracy, test_accuracy))       
+                        train_accuracy = sess.run(accuracy, feed_dict={x: batch[0], y: batch[1] })       
                         print('Epoch %d, training accuracy %g' % (i, train_accuracy))       
 
                 test_acc = sess.run(accuracy, feed_dict={x: digits_x_test[:200,:], y: y_test_one_hot[:200,:]})
