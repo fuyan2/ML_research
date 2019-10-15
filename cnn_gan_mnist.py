@@ -15,7 +15,7 @@ import math
 from skimage.measure import compare_ssim
 from tf_models import *
 from utils import *
-from snwgan import snw_Generator, snw_Discriminator, cnn_Discriminator
+# from snwgan import snw_Generator, snw_Discriminator, cnn_Discriminator
 inf = 1e9
 
 
@@ -119,7 +119,7 @@ desired_label = tf.placeholder(tf.float32, shape=[None, NUM_LABEL])
 # Build G Networks
 # Use CNN gan
 if cnn_gan:
-    G = snw_Generator(noise_dim, NUM_LABEL, gan_batch_size)
+    G = cnn_Generator(noise_dim, NUM_LABEL, gan_batch_size)
     gen_sample_unflat = G(gen_input,desired_label)
     gen_sample = tf.reshape(gen_sample_unflat,[gan_batch_size, x_dim])
     gen_vars = [G.linear_w, G.linear_b, G.deconv_w1, G.deconv_w2, G.deconv_w3]

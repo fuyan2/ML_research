@@ -163,3 +163,83 @@ class Inverter_Regularizer(object):
         rect = lrelu(out_layer, 0.3)
         return rect
 
+class cnn_Generator:
+  # Generator Parameters
+  def __init__(self, noise_dim, NUM_LABEL, batch_size):
+    self.batch_size = batch_size
+    self.linear_w = tf.Variable(glorot_init([noise_dim+NUM_LABEL, 7*7*256]),name='glw')
+    self.linear_b = tf.Variable(glorot_init([7*7*256]),name='glb')
+
+    self.deconv_w1 = tf.Variable(glorot_init([4, 4, 128, 256]),name='gdw1')
+    self.deconv_w2 = tf.Variable(glorot_init([4, 4, 64, 128]),name='gdw2')
+    self.deconv_w3 = tf.Variable(glorot_init([3, 3, 1, 64]),name='gdw3')
+
+    # self.deconv_b1 = tf.Variable(tf.constant(0.1, shape=[128]), name='gb1')
+    # self.deconv_b2 = tf.Variable(tf.constant(0.1, shape=[64]), name='gb2')
+    # self.deconv_b3 = tf.Variable(tf.constant(0.1, shape=[1]), name='gb3')
+
+    self.training = True
+
+ # Build Generator Graph
+  def __call__(self, z,y):
+    z_y = tf.concat([z,y],1)
+    linear_h = tf.matmul(z_y,self.linear_w)+self.linear_b
+    linear_h_reshape = tf.reshape(linear_h , [-1,7, 7,256])  
+    deconv_xw1 = tf.nn.conv2d_transpose(linear_h_reshape, self.deconv_w1,output_shape=[self.batch_size,14,14,128], strides=[1, 2, 2, 1])
+    xw1_norm = tf.layers.batch_normalization(deconv_xw1, training=self.training)
+    deconv_h1 = tf.nn.leaky_relu(xw1_norm )
+    deconv_xw2 = tf.nn.conv2d_transpose(deconv_h1, self.deconv_w2,output_shape=[self.batch_size,28,28,64], strides=[1, 2, 2, 1])
+    xw2_norm = tf.layers.batch_normalization(deconv_xw2, training=self.training)
+    deconv_h2 = tf.nn.leaky_relu(xw2_norm)
+    deconv_xw3 = tf.nn.conv2d_transpose(deconv_h2, self.deconv_w3,output_shape=[self.batch_size,28,28,1], strides=[1, 1, 1, 1])
+    # out_layer = tf.nn.sigmoid(deconv_xw3)
+    out_layer = tf.nn.tanh(deconv_xw3)
+    return out_layer
+
+class cnn_Discriminator:
+  # Discriminator Parameters
+  def __init__(self, NUM_LABEL):
+    self.conv_w1 = tf.get_variable('dw1', shape=[3, 3, 1, 64])
+    self.conv_w2 = tf.get_variable('dw2', shape=[4, 4, 64, 128])
+    self.conv_w3 = tf.get_variable('dw3', shape=[3, 3, 128, 128])
+    self.conv_w4 = tf.get_variable('dw4', shape=[4, 4, 128, 256])
+    # self.conv_w5 = tf.get_variable('dw5', shape=[3, 3, 256, 256])
+
+    # self.conv_b1 = tf.Variable(tf.constant(0.1, shape=[64]), name='db1') 
+    # self.conv_b2 = tf.Variable(tf.constant(0.1, shape=[128]), name='db2') 
+    # self.conv_b3 = tf.Variable(tf.constant(0.1, shape=[128]), name='db3') 
+    # self.conv_b4 = tf.Variable(tf.constant(0.1, shape=[256]), name='db4') 
+    # self.conv_b5 = tf.Variable(tf.constant(0.1, shape=[256]), name='db5') 
+
+    self.linear_w1 = tf.Variable(glorot_init([7*7*256+NUM_LABEL, 300]))
+    self.linear_b1 = tf.Variable(glorot_init([300]))
+    self.linear_w2 = tf.Variable(glorot_init([300, 1]))
+
+    self.training = True
+
+  # Build Discriminator Graph
+  def __call__(self, x, label):
+    conv_xw1 = tf.nn.conv2d(x, self.conv_w1,strides=[1, 1, 1, 1], padding='SAME')
+    xw1_norm = tf.layers.batch_normalization(conv_xw1, training=self.training)
+    conv_h1 = tf.nn.leaky_relu(xw1_norm)
+    conv_xw2 = tf.nn.conv2d(conv_h1, self.conv_w2, strides=[1, 2, 2, 1], padding='SAME')
+    xw2_norm = tf.layers.batch_normalization(conv_xw2, training=self.training)
+    conv_h2 = tf.nn.leaky_relu(xw2_norm)
+    conv_xw3 = tf.nn.conv2d(conv_h2, self.conv_w3, strides=[1, 1, 1, 1], padding='SAME')
+    xw3_norm = tf.layers.batch_normalization(conv_xw3, training=self.training)
+    conv_h3 = tf.nn.leaky_relu(xw3_norm)
+    conv_xw4 = tf.nn.conv2d(conv_h3, self.conv_w4, strides=[1, 2, 2, 1], padding='SAME')
+    xw4_norm = tf.layers.batch_normalization(conv_xw4, training=self.training)
+    conv_h4 = tf.nn.leaky_relu(xw4_norm)
+    # conv_xw5 = tf.nn.conv2d(conv_h4,spectral_normed_weight(self.conv_w5, num_iters=1, update_collection=SPECTRAL_NORM_UPDATE_OPS),strides=[1, 1, 1, 1], padding='SAME')
+    # xw5_norm = tf.layers.batch_normalization(conv_xw5, training=self.training)
+    # conv_h5 = tf.nn.leaky_relu(xw5_norm)
+    conv_h5_flat = tf.reshape(conv_h4, [-1, 7*7*256])
+    x_y = tf.concat((conv_h5_flat,label),1)
+    linear1 = tf.matmul(x_y, self.linear_w1) + self.linear_b1
+    linear1 = tf.nn.leaky_relu(linear1)
+
+    out = tf.matmul(linear1, self.linear_w2)
+    #! out = tf.sigmoid(out)
+    return out
+
