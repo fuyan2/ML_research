@@ -255,17 +255,17 @@ def train(beta, model_l2, test, load_model):
                 test_acc = sess.run([accuracy], feed_dict={x: digits_x_test[:200,:], y: digits_y_test_one_hot[:200,:]})
             else:
                 sess.run(iterator.initializer, feed_dict = {features: digits_x_train, labels: y_train_one_hot, batch_size: gan_batch_size, sample_size: 60000})
-                lr = 5e-5
+                lr = 1e-4
                 for i in range(15000):
                     batch = sess.run(next_batch)
                     model_optimizer.run(feed_dict={ x: batch[0], y: batch[1], learning_rate: lr})
                     # inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
-                    if i % 2000 == 0:
+                    if i % 5000 == 0:
                         lr = lr/2.
                         train_accuracy = sess.run(accuracy, feed_dict={x: batch[0], y: batch[1], learning_rate: lr})       
                         print('Epoch %d, training accuracy %g' % (i, train_accuracy))       
 
-                test_acc = sess.run(accuracy, feed_dict={x: digits_x_test[:200,:], y: y_test_one_hot[:200,:]})
+                test_acc = sess.run(accuracy, feed_dict={x: digits_x_test[:1000,:], y: y_test_one_hot[:1000,:]})
                 print("test acc:", test_acc)
                 save_path = saver.save(sess, 'tmp/cnn_mnist_model_beta%d.ckpt'%beta)
                 print("Model saved in path: %s" % save_path)
