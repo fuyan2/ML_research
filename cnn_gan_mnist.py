@@ -28,7 +28,7 @@ IMG_ROWS = 28
 IMG_COLS = 28
 NUM_LABEL = 10 #10
 GAN_CLASS_COE = 100 #10
-gan_batch_size = 256
+gan_batch_size = 250
 num_data = 10000
 INV_HIDDEN = 100 #5000
 beta = 0 #1, 0.5
@@ -106,7 +106,8 @@ correct = tf.equal(tf.argmax(y_ml, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
 
 # Build Optimizer !Use model_loss
-model_optimizer = tf.train.AdamOptimizer(0.0001).minimize(class_loss, var_list=model_var)
+learning_rate = tf.placeholder(tf.float32, name='lr')
+model_optimizer = tf.train.AdamOptimizer(learning_rate).minimize(class_loss, var_list=model_var)
 # inverter_optimizer = tf.train.AdamOptimizer(0.001).minimize(inv_loss, var_list=[inverter.w_model, inverter.w_label, inverter.w_out, inverter.b_in, inverter.b_out])
 
 #################### Build GAN Networks ############################
@@ -161,8 +162,8 @@ if wasserstein:
     gen_loss = -tf.reduce_mean(disc_fake) + GAN_CLASS_COE*gan_class_loss #+ 1. * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
     disc_loss = -tf.reduce_mean(similarity*(disc_real - disc_fake)) #+ wgan_grad_pen(gan_batch_size,aux_x, aux_label, gen_sample)
     clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in disc_vars] #0.01!
-    train_gen = tf.train.RMSPropOptimizer(learning_rate=5e-4).minimize(gen_loss, var_list=gen_vars)
-    train_disc = tf.train.RMSPropOptimizer(learning_rate=5e-4).minimize(disc_loss, var_list=disc_vars)
+    train_gen = tf.train.RMSPropOptimizer(learning_rate=learning_rate).minimize(gen_loss, var_list=gen_vars)
+    train_disc = tf.train.RMSPropOptimizer(learning_rate=learning_rate).minimize(disc_loss, var_list=disc_vars)
 else:  
     gen_loss = -tf.reduce_mean(tf.log(tf.maximum(0.00001, disc_fake))) + GAN_CLASS_COE*gan_class_loss + 0.01 * tf.nn.l2_loss(gen_weights) #0.007, only need when no auxiliary
     disc_loss = -tf.reduce_mean(similarity*(tf.log(tf.maximum(0.0000001, disc_real)) + tf.log(tf.maximum(0.0000001, 1. - disc_fake)))) 
@@ -246,8 +247,6 @@ def train(beta, model_l2, test, load_model):
 
             # Run the initializer
             sess.run(init)
-            # sess.run(iterator.initializer, feed_dict = {features: letters_x_train, labels: letters_y_train, batch_size: gan_batch_size, sample_size: 60000})
-
 
             # Train the Classifier First
             if load_model:
@@ -256,12 +255,14 @@ def train(beta, model_l2, test, load_model):
                 test_acc = sess.run([accuracy], feed_dict={x: digits_x_test[:200,:], y: digits_y_test_one_hot[:200,:]})
             else:
                 sess.run(iterator.initializer, feed_dict = {features: digits_x_train, labels: y_train_one_hot, batch_size: gan_batch_size, sample_size: 60000})
+                lr = 5e-5
                 for i in range(15000):
                     batch = sess.run(next_batch)
-                    model_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
+                    model_optimizer.run(feed_dict={ x: batch[0], y: batch[1], learning_rate: lr})
                     # inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
-                    if i % 1000 == 0:
-                        train_accuracy = sess.run(accuracy, feed_dict={x: batch[0], y: batch[1] })       
+                    if i % 2000 == 0:
+                        lr = lr/2.
+                        train_accuracy = sess.run(accuracy, feed_dict={x: batch[0], y: batch[1], learning_rate: lr})       
                         print('Epoch %d, training accuracy %g' % (i, train_accuracy))       
 
                 test_acc = sess.run(accuracy, feed_dict={x: digits_x_test[:200,:], y: y_test_one_hot[:200,:]})
@@ -293,18 +294,20 @@ def train(beta, model_l2, test, load_model):
 
             # Train GAN
             # Initialize Aux dataset for GAN train
+            lr = 5e-4
             sess.run(iterator.initializer, feed_dict = {features: aux_x_data, labels: aux_y_data, batch_size: gan_batch_size, sample_size: 40000})            
             for i in range(1000000):            
                 # Sample random noise 
                 batch = sess.run(next_batch)
                 z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
                 #! Train Discriminator
-                train_disc.run(feed_dict={aux_x: batch[0], gen_input: z, desired_label: batch[1]})
+                train_disc.run(feed_dict={aux_x: batch[0], gen_input: z, desired_label: batch[1], learning_rate: lr})
                 # if i % 5 == 0:
-                train_gen.run(feed_dict={aux_x: batch[0], gen_input: z, desired_label: batch[1]})
+                train_gen.run(feed_dict={aux_x: batch[0], gen_input: z, desired_label: batch[1], learning_rate: lr})
 
                 if i % 100000 == 0:
-                    gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1]})
+                    lr = lr/2.
+                    gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1], learning_rate: lr})
                     print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f, Classification loss: %f' % (i, gl, dl, cl))
 
                     inverted_xs = plot_gan_image('comparison/gan/cnn_gan_mnist/gan_out'+test+'iter', str(i), sess)
@@ -322,7 +325,9 @@ def train(beta, model_l2, test, load_model):
 
 if __name__ == '__main__':
     test = sys.argv[1]
+    # test = 'digits'
     print('train cnn_gan_mist '+test)
+    
     if test == 'letters':
         betas = [0]
         # betas = [0, 5, 10, 20, 30, 40, 60, 70, 80, 90, 100, 120]
