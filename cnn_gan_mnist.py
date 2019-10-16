@@ -256,7 +256,7 @@ def train(beta, model_l2, test, load_model):
             else:
                 sess.run(iterator.initializer, feed_dict = {features: digits_x_train, labels: y_train_one_hot, batch_size: gan_batch_size, sample_size: 60000})
                 lr = 1e-4
-                batch_per_epoch = digits_x_train.shape[0]/gan_batch_size
+                batch_per_epoch = int(digits_x_train.shape[0]/gan_batch_size)
                 for i in range(class_epoch):   
                     for j in range(batch_per_epoch):
                         batch = sess.run(next_batch)
@@ -294,7 +294,7 @@ def train(beta, model_l2, test, load_model):
             # Initialize Aux dataset for GAN train
             lr = 5e-4
             sess.run(iterator.initializer, feed_dict = {features: aux_x_data, labels: aux_y_data, batch_size: gan_batch_size, sample_size: 40000})            
-            batch_per_epoch = aux_y_data.shape[0]/gan_batch_size
+            batch_per_epoch = int(aux_y_data.shape[0]/gan_batch_size)
             for i in range(gan_epoch):   
                 for j in range(batch_per_epoch):           
                     # Sample random noise 
