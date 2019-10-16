@@ -36,6 +36,8 @@ model_l2 = 0 #0.0001
 wasserstein = True
 cnn_gan = True
 inverter_take_avgimg = False
+gan_epoch = 100
+class_epoch = 63
 #Fredrickson Params
 ALPHA = 20000
 BETA = 5
@@ -219,8 +221,6 @@ def plot_gan_image(name, epoch, sess):
         g = sess.run([gen_sample], feed_dict={gen_input: z, desired_label: d_label})
         g = np.reshape(g, (gan_batch_size, x_dim))
         avg_g = np.mean(g, axis=0)
-        # g = np.reshape(g, [gan_batch_size, 28, 28])
-        # g = g[0,:] #only pick one image
 
         inverted_xs[i] = avg_g
     
@@ -256,14 +256,16 @@ def train(beta, model_l2, test, load_model):
             else:
                 sess.run(iterator.initializer, feed_dict = {features: digits_x_train, labels: y_train_one_hot, batch_size: gan_batch_size, sample_size: 60000})
                 lr = 1e-4
-                for i in range(15000):
-                    batch = sess.run(next_batch)
-                    model_optimizer.run(feed_dict={ x: batch[0], y: batch[1], learning_rate: lr})
-                    # inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
-                    if i % 5000 == 0:
-                        lr = lr/2.
-                        train_accuracy = sess.run(accuracy, feed_dict={x: batch[0], y: batch[1], learning_rate: lr})       
-                        print('Epoch %d, training accuracy %g' % (i, train_accuracy))       
+                batch_per_epoch = digits_x_train.shape[0]/gan_batch_size
+                for i in range(class_epoch):   
+                    for j in range(batch_per_epoch):
+                        batch = sess.run(next_batch)
+                        model_optimizer.run(feed_dict={ x: batch[0], y: batch[1], learning_rate: lr})
+                        # inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
+                    
+                    lr = lr/2.
+                    train_accuracy = sess.run(accuracy, feed_dict={x: batch[0], y: batch[1], learning_rate: lr})       
+                    print('Epoch %d, training accuracy %g' % (i, train_accuracy))       
 
                 test_acc = sess.run(accuracy, feed_dict={x: digits_x_test[:1000,:], y: y_test_one_hot[:1000,:]})
                 print("test acc:", test_acc)
@@ -275,10 +277,6 @@ def train(beta, model_l2, test, load_model):
             inverted_xs = np.zeros((NUM_LABEL, x_dim))
             ssims = np.zeros(NUM_LABEL)
             for i in range(NUM_LABEL):
-            # fig, ax = plt.subplots(5)
-            # inverted_xs = np.zeros((5, x_dim))
-            # ssims = np.zeros(5)
-            # for i in range(5):
                 print("i = %d" % i)
                 inverted_xs[i] = fred_mi(i, y_ml, sess, 1)[0]
                 row = i//4
@@ -296,21 +294,22 @@ def train(beta, model_l2, test, load_model):
             # Initialize Aux dataset for GAN train
             lr = 5e-4
             sess.run(iterator.initializer, feed_dict = {features: aux_x_data, labels: aux_y_data, batch_size: gan_batch_size, sample_size: 40000})            
-            for i in range(1000000):            
-                # Sample random noise 
-                batch = sess.run(next_batch)
-                z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
-                #! Train Discriminator
-                train_disc.run(feed_dict={aux_x: batch[0], gen_input: z, desired_label: batch[1], learning_rate: lr})
-                # if i % 5 == 0:
-                train_gen.run(feed_dict={aux_x: batch[0], gen_input: z, desired_label: batch[1], learning_rate: lr})
+            batch_per_epoch = aux_y_data.shape[0]/gan_batch_size
+            for i in range(gan_epoch):   
+                for j in range(batch_per_epoch):           
+                    # Sample random noise 
+                    batch = sess.run(next_batch)
+                    z = np.random.uniform(-1., 1., size=[gan_batch_size, noise_dim])
+                    #! Train Discriminator
+                    train_disc.run(feed_dict={aux_x: batch[0], gen_input: z, desired_label: batch[1], learning_rate: lr})
+                    # if i % 5 == 0:
+                    train_gen.run(feed_dict={aux_x: batch[0], gen_input: z, desired_label: batch[1], learning_rate: lr})
 
-                if i % 100000 == 0:
-                    lr = lr/2.
-                    gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1], learning_rate: lr})
-                    print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f, Classification loss: %f' % (i, gl, dl, cl))
+                lr = lr/2.
+                gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1], learning_rate: lr})
+                print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f, Classification loss: %f' % (i, gl, dl, cl))
 
-                    inverted_xs = plot_gan_image('comparison/gan/cnn_gan_mnist/gan_out'+test+'iter', str(i), sess)
+                inverted_xs = plot_gan_image('comparison/gan/cnn_gan_mnist/gan_out'+test+'iter', str(i), sess)
 
             inverted_xs = plot_gan_image('comparison/gan/gan_out',str(1000000), sess)
             ssims = np.zeros(NUM_LABEL)
