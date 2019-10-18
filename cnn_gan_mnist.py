@@ -134,7 +134,7 @@ if cnn_gan:
     # Build 2 D Networks (one from noise input, one from generated samples)
     D = cnn_Discriminator(NUM_LABEL) 
     disc_real = D(aux_x_unflat, aux_label)
-    disc_fake = D(gen_sample_unflat, gen_label)
+    disc_fake = D(gen_sample_unflat, desired_label)
 
     # D Network Variables
     disc_vars = [D.linear_w1, D.linear_b1, D.linear_w2, D.conv_w1, D.conv_w2, D.conv_w3, D.conv_w4]
@@ -292,7 +292,7 @@ def train(beta, model_l2, test, load_model):
 
             # Train GAN
             # Initialize Aux dataset for GAN train
-            lr = 5e-4
+            lr = 1e-4
             sess.run(iterator.initializer, feed_dict = {features: aux_x_data, labels: aux_y_data, batch_size: gan_batch_size, sample_size: 40000})            
             batch_per_epoch = int(aux_y_data.shape[0]/gan_batch_size)
             for i in range(gan_epoch):   
@@ -305,8 +305,8 @@ def train(beta, model_l2, test, load_model):
                     # if i % 5 == 0:
                     train_gen.run(feed_dict={aux_x: batch[0], gen_input: z, desired_label: batch[1], learning_rate: lr})
 
-                if i%20 == 0:
-                    lr = lr/10.
+                if i%10 == 0:
+                    lr = lr/2.
                 gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1], learning_rate: lr})
                 print('Epoch %i: Generator Loss: %g, Discriminator Loss: %g, Classification loss: %g' % (i, gl, dl, cl))
 
