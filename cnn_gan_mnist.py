@@ -305,7 +305,8 @@ def train(beta, model_l2, test, load_model):
                     # if i % 5 == 0:
                     train_gen.run(feed_dict={aux_x: batch[0], gen_input: z, desired_label: batch[1], learning_rate: lr})
 
-                lr = lr/2.
+                if i%20 == 0:
+                    lr = lr/10.
                 gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1], learning_rate: lr})
                 print('Epoch %i: Generator Loss: %g, Discriminator Loss: %g, Classification loss: %g' % (i, gl, dl, cl))
 
