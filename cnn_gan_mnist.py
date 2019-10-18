@@ -12,7 +12,7 @@ import numpy as np
 import tensorflow as tf
 import random
 import math
-from skimage.measure import compare_ssim
+# from skimage.measure import compare_ssim
 from tf_models import *
 from utils import *
 # from snwgan import snw_Generator, snw_Discriminator, cnn_Discriminator
@@ -282,7 +282,7 @@ def train(beta, model_l2, test, load_model):
                 row = i//4
                 col = i%4
                 ax[row][col].imshow(np.reshape(inverted_xs[i], (28, 28)), cmap="gray", origin='lower')
-                ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)        
+                ssims[i]= i #compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)        
             plt.savefig('comparison/fred/avg_fred/fred_mi_%g_beta_%g_%s.png'%(beta,model_l2,test))
             dis = inverted_xs - avg_imgs
             l2_dis = np.linalg.norm(dis,ord=2,axis=1)
@@ -315,7 +315,7 @@ def train(beta, model_l2, test, load_model):
             inverted_xs = plot_gan_image('comparison/gan/gan_out',str(1000000), sess)
             ssims = np.zeros(NUM_LABEL)
             for i in range(NUM_LABEL):
-                ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)
+                ssims[i]= i #compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)
             dis = inverted_xs - avg_imgs
             l2_dis = np.linalg.norm(dis,ord=2,axis=1)
             gan_avg_dis = np.mean(l2_dis)
