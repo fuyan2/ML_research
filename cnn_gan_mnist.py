@@ -283,7 +283,7 @@ def train(beta, model_l2, test, load_model):
                 col = i%4
                 ax[row][col].imshow(np.reshape(inverted_xs[i], (28, 28)), cmap="gray", origin='lower')
                 ssims[i]= compare_ssim(np.reshape(avg_imgs[i], (28, 28)), np.reshape(inverted_xs[i], (28, 28)), data_range=1.0 - 0.0)        
-            plt.savefig('comparison/fred/avg_fred/fred_mi_%fbeta_%f_%s.png'%(beta,model_l2,test))
+            plt.savefig('comparison/fred/avg_fred/fred_mi_%g_beta_%g_%s.png'%(beta,model_l2,test))
             dis = inverted_xs - avg_imgs
             l2_dis = np.linalg.norm(dis,ord=2,axis=1)
             fred_avg_dis = np.mean(l2_dis)
@@ -307,7 +307,7 @@ def train(beta, model_l2, test, load_model):
 
                 lr = lr/2.
                 gl,dl,cl = sess.run([gen_loss, disc_loss, gan_class_loss], feed_dict={aux_x: batch[0],    gen_input: z, desired_label: batch[1], learning_rate: lr})
-                print('Epoch %i: Generator Loss: %f, Discriminator Loss: %f, Classification loss: %f' % (i, gl, dl, cl))
+                print('Epoch %i: Generator Loss: %g, Discriminator Loss: %g, Classification loss: %g' % (i, gl, dl, cl))
 
                 inverted_xs = plot_gan_image('comparison/gan/cnn_gan_mnist/gan_out'+test+'iter', str(i), sess)
 
