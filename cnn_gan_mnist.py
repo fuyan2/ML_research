@@ -262,8 +262,8 @@ def train(beta, model_l2, test, load_model):
                         batch = sess.run(next_batch)
                         model_optimizer.run(feed_dict={ x: batch[0], y: batch[1], learning_rate: lr})
                         # inverter_optimizer.run(feed_dict={ x: batch[0], y: batch[1]})
-                    
-                    lr = lr/2.
+                    if i%20 == 0:
+                        lr = lr/2.
                     train_accuracy = sess.run(accuracy, feed_dict={x: batch[0], y: batch[1], learning_rate: lr})       
                     print('Epoch %d, training accuracy %g' % (i, train_accuracy))       
 
